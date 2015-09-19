@@ -9,39 +9,55 @@ bool istrue(const char *arg)
 	return !_stricmp(arg, "true") || !_stricmp(arg, "1") || (0 != atoi(arg));
 }
 
-static bool luaEval(DWORD* obj, int argc, const char** argv)
+void showluaerror(lua_State *L, bool silent=false)
 {
-	if (luaL_loadbuffer(gL, argv[1], strlen(argv[1]), "input") || lua_pcall(gL, 0, 0, 0))
-	{
-		if (argc < 3 || !istrue(argv[2]))
-			Printf("Lua error: %s", lua_tostring(gL, -1));
-		else
-			lua_pop(gL, -1);
-
-		return false;
-	}
-
-	return true;
+	if (silent)
+		lua_pop(L, -1);
+	else
+		Printf("Lua error: %s", lua_tostring(L, -1));
 }
 
-static bool luaExec(DWORD *obj, int argc, const char** argv)
+static const char *luaEval(DWORD* obj, int argc, const char** argv)
+{
+	if (luaL_loadbuffer(gL, argv[1], strlen(argv[1]), "input") || lua_pcall(gL, 0, 1, 0))
+	{
+		showluaerror(gL, argc >= 3 && istrue(argv[2]));
+		return "";
+	}
+
+	return lua_tostring(gL, -1);
+}
+
+static const char *luaExec(DWORD *obj, int argc, const char** argv)
 {
 	// warning: does not use Blockland file system atm, allows execution outside game folder
 	
 	if (argc < 3 || !istrue(argv[2]))
 		Printf("Executing %s.", argv[1]);
 
-	if (luaL_loadfile(gL, argv[1]) || lua_pcall(gL, 0, 0, 0))
+	if (luaL_loadfile(gL, argv[1]) || lua_pcall(gL, 0, 1, 0))
 	{
-		if (argc < 3 || !istrue(argv[2]))
-			Printf("Lua error: %s", lua_tostring(gL, -1));
-		else
-			lua_pop(gL, -1);
-
-		return false;
+		showluaerror(gL, argc >= 3 && istrue(argv[2]));
+		return "";
 	}
 
-	return true;
+	return lua_tostring(gL, -1);
+}
+
+static const char *luaCall(DWORD *obj, int argc, const char** argv)
+{
+	lua_getglobal(gL, argv[1]);
+
+	for (int i = 2; i < argc; i++)
+		lua_pushstring(gL, argv[i]);
+
+	if (lua_pcall(gL, argc - 2, 1, 0))
+	{
+		showluaerror(gL);
+		return "";
+	}
+
+	return lua_tostring(gL, -1);
 }
 
 static int tsEval(lua_State *L)
@@ -87,6 +103,7 @@ DWORD WINAPI Init(LPVOID args)
 
 	ConsoleFunction(NULL, "luaEval", luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
 	ConsoleFunction(NULL, "luaExec", luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
+	ConsoleFunction(NULL, "luaCall", luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
 	return 0;
 }

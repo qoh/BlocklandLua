@@ -81,5 +81,11 @@ void ConsoleVariable(const char* name, char* data);
 //Evaluate a torquescript string in global scope
 const char* Eval(const char* str);
 
+BLFUNC_EXTERN(void, , SetGlobalVariable, const char *name, const char *value);
+BLFUNC_EXTERN(char *, , GetGlobalVariable, const char *name);
+
+typedef void(__thiscall* ShapeNameHudOnRenderFn)(DWORD* obj, DWORD arg1, DWORD arg2, DWORD arg3);
+static ShapeNameHudOnRenderFn ShapeNameHudOnRender;
+
 //Initialize the Torque Interface
 bool InitTorqueStuff();

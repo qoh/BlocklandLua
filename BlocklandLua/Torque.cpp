@@ -44,6 +44,9 @@ BLFUNC(void, __thiscall, AddVariable, DWORD dictionaryPtr, const char* name, int
 //Executing code and calling torquescript functions
 BLFUNC(const char*, , Evaluate, const char* string, bool echo, const char* fileName);
 
+BLFUNC(void, , SetGlobalVariable, const char *name, const char *value);
+BLFUNC(char *, , GetGlobalVariable, const char *name);
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -194,6 +197,8 @@ bool InitTorqueStuff()
 	if (!Printf)
 		return false;
 
+	ShapeNameHudOnRender = (ShapeNameHudOnRenderFn)ScanFunc("\x81\xec\x00\x00\x00\x00\x53\x8b\xd9\x8a\x83\xc9\x00\x00\x00\x84\xc0\x55\x56\x57\x89\x5c\x24\x14", "xx????xxxxxxxxxxxxxxxxxx");
+
 	//First find all the functions
 	BLSCAN(LookupNamespace, "\x8B\x44\x24\x04\x85\xC0\x75\x05", "xxxxxxxx");
 	BLSCAN(StringTableInsert, "\x53\x8B\x5C\x24\x08\x55\x56\x57\x53", "xxxxxxxxx");
@@ -231,6 +236,9 @@ bool InitTorqueStuff()
 
 	BLSCAN(AddVariable, "\x8B\x44\x24\x04\x56\x8B\xF1\x80\x38\x24\x74\x1A", "xxxxxxxxxxxx");
 	BLSCAN(Evaluate, "\x8A\x44\x24\x08\x84\xC0\x56\x57\x8B\x7C\x24\x0C", "xxxxxxxxxxxx");
+
+	BLSCAN(GetGlobalVariable, "\x56\x8b\x74\x24\x08\x85\xf6\x74\x00\x8a\x06\x84\xc0\x75", "xxxxxxxx?xxxxx");
+	BLSCAN(SetGlobalVariable, "\x56\x8b\x74\x24\x08\x80\x3e\x24\x8b\xc6\x74\x00\x56\xe8", "xxxxxxxxxxx?xx");
 
 	//The string table is used in lookupnamespace so we can get it's location
 	StringTable = *(DWORD*)(*(DWORD*)((DWORD)LookupNamespace + 15));
