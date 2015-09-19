@@ -1,6 +1,12 @@
 # BlocklandLua
 
-Exposes LuaJIT to TorqueScript. From the TorqueScript side, you can use `luaEval` to execute arbitrary Lua code (given as a string), or `luaExec` to execute a file as Lua code.
+Exposes LuaJIT to TorqueScript.
+
+Defines the following TorqueScript functions:
+
+* `function luaEval(string code)` - Run code as Lua
+* `function luaExec(string filename)` - Execute a Lua source file
+* `function luaCall(string name, ...string arguments)` - Call a global Lua function by name with string arguments
 
 From the Lua side, there is a new global table named `ts` containing:
 
