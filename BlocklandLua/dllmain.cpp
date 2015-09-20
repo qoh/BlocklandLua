@@ -8,10 +8,6 @@ typedef struct {
 	DWORD *obj;
 } ts_object_t;
 
-typedef struct {
-	char *nsEntry;
-} ts_nsentry_t;
-
 bool istrue(const char *arg)
 {
 	return !_stricmp(arg, "true") || !_stricmp(arg, "1") || (0 != atoi(arg));
@@ -25,15 +21,14 @@ void showluaerror(lua_State *L, bool silent=false)
 		Printf("Lua error: %s", lua_tostring(L, -1));
 }
 
-int checkluaerror(lua_State *L, int result)
+void runlua(lua_State *L, const char *code, const char *name="input")
 {
-	if (result)
+	if (luaL_loadbuffer(L, code, strlen(code), name) || lua_pcall(L, 0, 0, 0))
 		showluaerror(L);
-
-	return result;
 }
 
-static const char *tsf_luaEval(DWORD* obj, int argc, const char** argv)
+// TorqueScript ConsoleFunction callbacks
+static const char *ts_luaEval(DWORD* obj, int argc, const char** argv)
 {
 	if (luaL_loadbuffer(gL, argv[1], strlen(argv[1]), "input") || lua_pcall(gL, 0, 1, 0))
 	{
@@ -44,9 +39,9 @@ static const char *tsf_luaEval(DWORD* obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *tsf_luaExec(DWORD *obj, int argc, const char** argv)
+static const char *ts_luaExec(DWORD *obj, int argc, const char** argv)
 {
-	// warning: does not use Blockland file system atm, allows execution outside game folder
+	// note: does not use Blockland file system atm, allows execution outside game folder, does not support zip
 	
 	if (argc < 3 || !istrue(argv[2]))
 		Printf("Executing %s.", argv[1]);
@@ -60,7 +55,7 @@ static const char *tsf_luaExec(DWORD *obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *tsf_luaCall(DWORD *obj, int argc, const char** argv)
+static const char *ts_luaCall(DWORD *obj, int argc, const char** argv)
 {
 	lua_getglobal(gL, argv[1]);
 
@@ -76,6 +71,7 @@ static const char *tsf_luaCall(DWORD *obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
+// Lua CFunction callbacks
 static int lu_print(lua_State *L)
 {
 	int n = lua_gettop(L);
@@ -233,6 +229,39 @@ static int lu_ts_obj(lua_State *L)
 	return 1;
 }
 
+static int lu_ts_obj_index(lua_State *L)
+{
+	ts_object_t *tso = check_ts_object(L, 1);
+	const char *k = luaL_checkstring(L, 2);
+
+	if (strcmp(k, "id") == 0)
+	{
+		lua_pushinteger(L, *(int *)((char *)tso->obj + 32));
+		return 1;
+	}
+	else if (strcmp(k, "name") == 0)
+	{
+		char *name = *((char **)tso->obj + 4);
+		lua_pushstring(L, name);
+		return 1;
+	}
+	else
+		return luaL_error(L, "unknown key %s", k);
+}
+
+static int lu_ts_obj_newindex(lua_State *L)
+{
+	ts_object_t *tso = check_ts_object(L, 1);
+	const char *k = luaL_checkstring(L, 2);
+
+	if (strcmp(k, "name") == 0)
+	{
+		return luaL_error(L, "can't do this yet");
+	}
+	else
+		return luaL_error(L, "unknown key %s", k);
+}
+
 static int lu_ts_global_index(lua_State *L)
 {
 	lua_pushstring(L, GetGlobalVariable(luaL_checkstring(L, 2)));
@@ -245,6 +274,7 @@ static int lu_ts_global_newindex(lua_State *L)
 	return 0;
 }
 
+// Module setup stuff
 DWORD WINAPI Init(LPVOID args)
 {
 	if (!InitTorqueStuff())
@@ -263,6 +293,9 @@ DWORD WINAPI Init(LPVOID args)
 
 	// set up ts_object metatable
 	luaL_newmetatable(L, "ts_object_mt");
+	lua_pushstring(L, "__index"); lua_pushcfunction(L, lu_ts_obj_index); lua_rawset(L, -3);
+	lua_pushstring(L, "__newindex"); lua_pushcfunction(L, lu_ts_obj_newindex); lua_rawset(L, -3);
+	lua_pop(L, -1);
 
 	// set up global functions
 	lua_pushcfunction(L, lu_print); lua_setglobal(L, "print");
@@ -287,7 +320,7 @@ DWORD WINAPI Init(LPVOID args)
 	lua_setglobal(L, "ts");
 	
 	// set up the con table
-	if (!checkluaerror(L, luaL_loadstring(L, R"lua(
+	runlua(L, R"lua(
 		local func = ts.func
 		_G.con = setmetatable({}, {
 		  __index = function(t, k)
@@ -296,16 +329,16 @@ DWORD WINAPI Init(LPVOID args)
 		    return t[k]
 		  end
 		})
-	)lua"))) {
-		checkluaerror(L, lua_pcall(L, 0, 0, 0));
-	}
+	)lua");
 
-	ConsoleFunction(NULL, "luaEval", tsf_luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
-	ConsoleFunction(NULL, "luaExec", tsf_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
-	ConsoleFunction(NULL, "luaCall", tsf_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
+	ConsoleFunction(NULL, "luaEval", ts_luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
+	ConsoleFunction(NULL, "luaExec", ts_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
+	ConsoleFunction(NULL, "luaCall", ts_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
 	Printf("Lua DLL loaded");
 	Sleep(100);
+
+	//runlua(L, "pcall(function()require('autorun')end)");
 	Eval("$luaLoaded=true;if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
 
 	return 0;
