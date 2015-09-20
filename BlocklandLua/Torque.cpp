@@ -46,8 +46,10 @@ BLFUNC(void, __thiscall, AddVariable, DWORD dictionaryPtr, const char* name, int
 //Executing code and calling torquescript functions
 BLFUNC(const char*, , Evaluate, const char* string, bool echo, const char* fileName);
 
-BLFUNC(void, , SetGlobalVariable, const char *name, const char *value);
-BLFUNC(char *, , GetGlobalVariable, const char *name);
+SetGlobalVariableFn SetGlobalVariable;
+GetGlobalVariableFn GetGlobalVariable;
+//BLFUNC(void, , SetGlobalVariable, const char *name, const char *value);
+//BLFUNC(char *, , GetGlobalVariable, const char *name);
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -174,6 +174,18 @@ static int luaf_call(lua_State *L)
 	return 0;
 }
 
+static int luaf_global_index(lua_State *L)
+{
+	lua_pushstring(L, GetGlobalVariable(luaL_checkstring(L, 2)));
+	return 1;
+}
+
+static int luaf_global_newindex(lua_State *L)
+{
+	SetGlobalVariable(luaL_checkstring(L, 2), lua_tostring(L, 3));
+	return 0;
+}
+
 DWORD WINAPI Init(LPVOID args)
 {
 	if (!InitTorqueStuff())
@@ -199,6 +211,21 @@ DWORD WINAPI Init(LPVOID args)
 	lua_pushcfunction(L, luaf_call);
 	lua_setglobal(L, "ts_call");
 
+	// set up ts_global get/set
+	lua_newtable(L);
+	lua_newtable(L);
+
+	lua_pushstring(L, "__index");
+	lua_pushcfunction(L, luaf_global_index);
+	lua_rawset(L, -3);
+
+	lua_pushstring(L, "__newindex");
+	lua_pushcfunction(L, luaf_global_newindex);
+	lua_rawset(L, -3);
+
+	lua_setmetatable(L, -2);
+	lua_setglobal(L, "ts_global");
+
 	if (!checkluaerror(L, luaL_loadstring(L, R"lua(
 		local c = ts_call
 		_G.ts = setmetatable({},{
@@ -217,8 +244,9 @@ DWORD WINAPI Init(LPVOID args)
 	ConsoleFunction(NULL, "luaExec", tsf_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
 	ConsoleFunction(NULL, "luaCall", tsf_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
+	Printf("Lua DLL loaded");
 	Sleep(50);
-	Eval("if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
+	Eval("$luaLoaded=true;if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
 
 	return 0;
 }
