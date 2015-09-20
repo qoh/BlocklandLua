@@ -30,10 +30,7 @@ enum NamespaceEntryType {
 #define BLSCAN(target, pattern, mask)            \
 	target = (target##Fn)ScanFunc(pattern, mask); \
 	if(target == NULL)                             \
-		Printf("torquedll | Cannot find function "#target"!"); \
-	else \
-		Printf("torquedll | Found "#target" at %x", target);
-
+		Printf("torquedll | Cannot find function "#target"!");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

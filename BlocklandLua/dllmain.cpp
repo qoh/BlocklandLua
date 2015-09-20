@@ -217,6 +217,7 @@ DWORD WINAPI Init(LPVOID args)
 	ConsoleFunction(NULL, "luaExec", tsf_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
 	ConsoleFunction(NULL, "luaCall", tsf_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
+	Sleep(50);
 	Eval("if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
 
 	return 0;
