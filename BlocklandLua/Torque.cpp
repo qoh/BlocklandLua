@@ -32,6 +32,8 @@ LookupNamespaceFn LookupNamespace;
 StringTableInsertFn StringTableInsert;
 Namespace__lookupFn Namespace__lookup;
 CodeBlock__execFn CodeBlock__exec;
+Sim__findObject_nameFn Sim__findObject_name;
+Sim__findObject_idFn Sim__findObject_id;
 
 //Namespace::addCommand overloads
 BLFUNC(void, __thiscall, AddStringCommand, DWORD* ns, const char* name, StringCallback cb, const char *usage, int minArgs, int maxArgs);
@@ -208,6 +210,8 @@ bool InitTorqueStuff()
 	BLSCAN(StringTableInsert, "\x53\x8B\x5C\x24\x08\x55\x56\x57\x53", "xxxxxxxxx");
 	BLSCAN(Namespace__lookup, "\x53\x56\x8B\xF1\x8B\x46\x24", "xxxxxxx");
 	BLSCAN(CodeBlock__exec, "\x83\xEC\x44\x53\x55\x56\x8B\xE9", "xxxxxxxx");
+	BLSCAN(Sim__findObject_name, "\x57\x8B\x7C\x24\x08\x8A\x07", "xxxxxxx");
+	BLSCAN(Sim__findObject_id, "\x8B\x44\x24\x04\x8B\x0D\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\xC3", "xxxxxx????xx????x");
 
 	//These are almost identical. Long sigs required
 	BLSCAN(AddStringCommand,

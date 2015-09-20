@@ -44,6 +44,8 @@ BLFUNC_EXTERN(DWORD*, , LookupNamespace, const char* ns);
 BLFUNC_EXTERN(const char*, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
 BLFUNC_EXTERN(void*, __thiscall, Namespace__lookup, int namespacePtr, int name)
 BLFUNC_EXTERN(void*, __thiscall, CodeBlock__exec, void *this_, unsigned int ip, const char *functionName, void *thisNamespace, unsigned int argc, const char **argv, bool noCalls, void *packageName, int setFrame)
+BLFUNC_EXTERN(DWORD*, , Sim__findObject_name, const char *name);
+BLFUNC_EXTERN(DWORD*, , Sim__findObject_id, unsigned int id);
 
 //Callback types for exposing methods to torquescript
 typedef const char* (*StringCallback)(DWORD* obj, int argc, const char* argv[]);
