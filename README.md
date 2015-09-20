@@ -14,7 +14,7 @@ From the Lua side, there's a new global table called `ts` with the following key
 * `ts.eval(string code)` - Run TorqueScript code in the global scope
 * `ts.func(string namespace, string function)` - Get a Lua function which calls a TorqueScript function (mind the leading `this` argument)
 * `ts.obj(string name)` *or* `ts.obj(number id)` - Get a handle to a TorqueScript object that can be passed as the `this` argument to a function resolved with `ts.func`. (there's also an alias of `ts.obj` called `ts.grab`).
-* `ts.globals` - Get/set keys of this table to work with global TorqueScript variables.
+* `ts.global` - Get/set keys of this table to work with global TorqueScript variables.
 
 To work with object methods, first resolve the function (once) and later on call it with your object.
 
