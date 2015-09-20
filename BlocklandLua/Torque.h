@@ -1,5 +1,17 @@
 #include <Windows.h>
 
+enum NamespaceEntryType {
+	GroupMarker = -3,
+	OverloadMarker = -2,
+	InvalidFunctionType = -1,
+	ScriptFunctionType,
+	StringCallbackType,
+	IntCallbackType,
+	FloatCallbackType,
+	VoidCallbackType,
+	BoolCallbackType
+};
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Macros
@@ -18,7 +30,9 @@
 #define BLSCAN(target, pattern, mask)            \
 	target = (target##Fn)ScanFunc(pattern, mask); \
 	if(target == NULL)                             \
-		Printf("PlayerCollisionToggle | Cannot find function "#target"!"); 
+		Printf("torquedll | Cannot find function "#target"!"); \
+	else \
+		Printf("torquedll | Found "#target" at %x", target);
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,6 +41,12 @@
 
 //Con::printf
 BLFUNC_EXTERN(void, , Printf, const char* format, ...);
+
+extern DWORD StringTable;
+BLFUNC_EXTERN(DWORD*, , LookupNamespace, const char* ns);
+BLFUNC_EXTERN(const char*, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
+BLFUNC_EXTERN(void*, __thiscall, Namespace__lookup, int namespacePtr, int name)
+BLFUNC_EXTERN(void*, __thiscall, CodeBlock__exec, void *this_, unsigned int ip, const char *functionName, void *thisNamespace, unsigned int argc, const char **argv, bool noCalls, void *packageName, int setFrame)
 
 //Callback types for exposing methods to torquescript
 typedef const char* (*StringCallback)(DWORD* obj, int argc, const char* argv[]);

@@ -17,7 +17,15 @@ void showluaerror(lua_State *L, bool silent=false)
 		Printf("Lua error: %s", lua_tostring(L, -1));
 }
 
-static const char *luaEval(DWORD* obj, int argc, const char** argv)
+int checkluaerror(lua_State *L, int result)
+{
+	if (result)
+		showluaerror(L);
+
+	return result;
+}
+
+static const char *tsf_luaEval(DWORD* obj, int argc, const char** argv)
 {
 	if (luaL_loadbuffer(gL, argv[1], strlen(argv[1]), "input") || lua_pcall(gL, 0, 1, 0))
 	{
@@ -28,7 +36,7 @@ static const char *luaEval(DWORD* obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *luaExec(DWORD *obj, int argc, const char** argv)
+static const char *tsf_luaExec(DWORD *obj, int argc, const char** argv)
 {
 	// warning: does not use Blockland file system atm, allows execution outside game folder
 	
@@ -44,7 +52,7 @@ static const char *luaExec(DWORD *obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *luaCall(DWORD *obj, int argc, const char** argv)
+static const char *tsf_luaCall(DWORD *obj, int argc, const char** argv)
 {
 	lua_getglobal(gL, argv[1]);
 
@@ -60,15 +68,109 @@ static const char *luaCall(DWORD *obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static int tsEval(lua_State *L)
+static int luaf_eval(lua_State *L)
 {
 	lua_pushstring(L, Eval(luaL_checkstring(L, 1)));
 	return 1;
 }
 
-static int tsEcho(lua_State *L)
+static int luaf_print(lua_State *L)
 {
-	Printf("%s", luaL_checkstring(L, -1));
+	int n = lua_gettop(L);
+
+	if (n == 1)
+		Printf("%s", lua_tostring(L, 1));
+	else if (n == 0)
+		Printf("");
+	else
+	{
+		char message[1024];
+		message[0] = 0;
+
+		for (int i = 1; i <= n; i++)
+		{
+			if (i > 1) strcat_s(message, " ");
+			strcat_s(message, lua_tostring(L, i));
+		}
+
+		Printf("%s", message);
+	}
+
+	return 0;
+}
+
+static int luaf_call(lua_State *L)
+{
+	const char *ns = luaL_checkstring(L, 1);
+	const char *fn = luaL_checkstring(L, 2);
+
+	if (!strcmp(ns, ""))
+		ns = NULL;
+
+	int argc = lua_gettop(L) - 2;
+	if (argc > 20)
+		argc = 20;
+
+	const char *argv[20];
+	argv[0] = fn; argc++;
+	for (int i = 0; i < argc; i++)
+		argv[i + 1] = lua_tostring(L, 3 + i);
+
+	char *pNamespace = (char *)LookupNamespace(ns);
+	if (pNamespace == 0)
+	{
+		luaL_error(L, "calling function in unknown namespace %s", ns); // Is this even possible?
+		return 0;
+	}
+
+	char *pEntry = (char *)Namespace__lookup((int)pNamespace, (int)StringTableInsert(StringTable, fn, false));
+	if (pEntry == 0)
+	{
+		luaL_error(L, "calling unknown function %s::%s", ns, fn);
+		return 0;
+	}
+
+	NamespaceEntryType mType = *(NamespaceEntryType *)(pEntry + 12);
+	if (mType == ScriptFunctionType)
+	{
+		unsigned int mFunctionOffset = *(unsigned int *)(pEntry + 36);
+
+		if (mFunctionOffset)
+		{
+			char *mCode = *(char **)(pEntry + 32);
+			char *mPackage = *(char **)(pEntry + 28);
+			int setFrame = *(int *)(pEntry + 12);
+			lua_pushstring(L, (const char *)CodeBlock__exec(mCode, mFunctionOffset, fn, pNamespace, argc, argv, false, mPackage, setFrame));
+			//lua_pushstring(L, (const char *)CodeBlock__exec(mCode, mFunctionOffset, fn, pNamespace, argc, argv, false, mPackage, 0));
+			return 1;
+		}
+		else
+		{
+			lua_pushstring(L, "");
+			return 0;
+		}
+	}
+
+	int mMinArgs = *(int *)(pEntry + 16);
+	int mMaxArgs = *(int *)(pEntry + 20);
+	if ((mMinArgs && argc < mMinArgs) || (mMaxArgs && argc > mMaxArgs))
+	{
+		luaL_error(L, "wrong number of arguments to %s::%s (expects %d-%d)", ns, fn, mMinArgs, mMaxArgs);
+		return 0;
+	}
+
+	DWORD *obj = NULL;
+	void *cb = (int *)(pEntry + 40);
+	switch (mType)
+	{
+		case StringCallbackType: lua_pushstring(L, (*(StringCallback *)cb)(obj, argc, argv)); return 1;
+		case IntCallbackType: lua_pushnumber(L, (*(IntCallback *)cb)(obj, argc, argv)); return 1;
+		case FloatCallbackType: lua_pushnumber(L, (*(FloatCallback *)cb)(obj, argc, argv)); return 1;
+		case BoolCallbackType: lua_pushboolean(L, (*(BoolCallback *)cb)(obj, argc, argv)); return 1;
+		case VoidCallbackType: (*(VoidCallback *)cb)(obj, argc, argv); return 0;
+	}
+
+	luaL_error(L, "invalid function call");
 	return 0;
 }
 
@@ -88,22 +190,34 @@ DWORD WINAPI Init(LPVOID args)
 
 	luaL_openlibs(L);
 
-	lua_newtable(L);
-	lua_pushstring(L, "eval");
-	lua_pushcfunction(L, tsEval);
-	lua_pushvalue(L, -1);
-	lua_setglobal(L, "eval");
-	lua_rawset(L, -3);
-	lua_pushstring(L, "echo");
-	lua_pushcfunction(L, tsEcho);
-	lua_pushvalue(L, -1);
-	lua_setglobal(L, "echo");
-	lua_rawset(L, -3);
-	lua_setglobal(L, "ts");
+	lua_pushcfunction(L, luaf_print);
+	lua_setglobal(L, "print");
 
-	ConsoleFunction(NULL, "luaEval", luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
-	ConsoleFunction(NULL, "luaExec", luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
-	ConsoleFunction(NULL, "luaCall", luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
+	lua_pushcfunction(L, luaf_eval);
+	lua_setglobal(L, "ts_eval");
+
+	lua_pushcfunction(L, luaf_call);
+	lua_setglobal(L, "ts_call");
+
+	if (!checkluaerror(L, luaL_loadstring(L, R"lua(
+		local c = ts_call
+		_G.ts = setmetatable({},{
+		  __index=function(t,k)
+		    t[k]=function(...)
+			  return c('', k, ...)
+		    end
+		    return t[k]
+		  end
+		})
+	)lua"))) {
+		checkluaerror(L, lua_pcall(L, 0, 0, 0));
+	}
+
+	ConsoleFunction(NULL, "luaEval", tsf_luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
+	ConsoleFunction(NULL, "luaExec", tsf_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
+	ConsoleFunction(NULL, "luaCall", tsf_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
+
+	Eval("if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
 
 	return 0;
 }

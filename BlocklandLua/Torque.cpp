@@ -12,7 +12,7 @@ static DWORD ImageBase;
 static DWORD ImageSize;
 
 //StringTable pointer
-static DWORD StringTable;
+DWORD StringTable;
 
 //Global Variable dictionary pointer
 static DWORD GlobalVars;
@@ -26,10 +26,12 @@ static DWORD GlobalVars;
 PrintfFn Printf;
 
 //Con::lookupNamespace
-BLFUNC(DWORD*, , LookupNamespace, const char* ns);
+LookupNamespaceFn LookupNamespace;
 
 //StringTable::insert
-BLFUNC(const char*, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
+StringTableInsertFn StringTableInsert;
+Namespace__lookupFn Namespace__lookup;
+CodeBlock__execFn CodeBlock__exec;
 
 //Namespace::addCommand overloads
 BLFUNC(void, __thiscall, AddStringCommand, DWORD* ns, const char* name, StringCallback cb, const char *usage, int minArgs, int maxArgs);
@@ -202,6 +204,8 @@ bool InitTorqueStuff()
 	//First find all the functions
 	BLSCAN(LookupNamespace, "\x8B\x44\x24\x04\x85\xC0\x75\x05", "xxxxxxxx");
 	BLSCAN(StringTableInsert, "\x53\x8B\x5C\x24\x08\x55\x56\x57\x53", "xxxxxxxxx");
+	BLSCAN(Namespace__lookup, "\x53\x56\x8B\xF1\x8B\x46\x24", "xxxxxxx");
+	BLSCAN(CodeBlock__exec, "\x83\xEC\x44\x53\x55\x56\x8B\xE9", "xxxxxxxx");
 
 	//These are almost identical. Long sigs required
 	BLSCAN(AddStringCommand,
