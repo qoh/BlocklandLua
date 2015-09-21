@@ -6,6 +6,7 @@ lua_State *gL;
 
 typedef struct {
 	DWORD *obj;
+	unsigned int id;
 } ts_object_t;
 
 bool istrue(const char *arg)
@@ -226,6 +227,8 @@ static int lu_ts_obj(lua_State *L)
 	lua_setmetatable(L, -2);
 
 	tso->obj = obj;
+	tso->id = *(unsigned int *)((char *)obj + 32);
+	
 	return 1;
 }
 
@@ -243,6 +246,11 @@ static int lu_ts_obj_index(lua_State *L)
 	{
 		char *name = *((char **)tso->obj + 4);
 		lua_pushstring(L, name);
+		return 1;
+	}
+	else if (strcmp(k, "exists") == 0)
+	{
+		lua_pushboolean(L, Sim__findObject_id(tso->id) != NULL);
 		return 1;
 	}
 	else
