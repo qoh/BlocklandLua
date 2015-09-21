@@ -34,13 +34,15 @@ Namespace__lookupFn Namespace__lookup;
 CodeBlock__execFn CodeBlock__exec;
 Sim__findObject_nameFn Sim__findObject_name;
 Sim__findObject_idFn Sim__findObject_id;
+SimObject__setDataFieldFn SimObject__setDataField;
+SimObject__getDataFieldFn SimObject__getDataField;
 
 //Namespace::addCommand overloads
-BLFUNC(void, __thiscall, AddStringCommand, DWORD* ns, const char* name, StringCallback cb, const char *usage, int minArgs, int maxArgs);
-BLFUNC(void, __thiscall, AddIntCommand, DWORD* ns, const char* name, IntCallback cb, const char *usage, int minArgs, int maxArgs);
-BLFUNC(void, __thiscall, AddFloatCommand, DWORD* ns, const char* name, FloatCallback cb, const char *usage, int minArgs, int maxArgs);
-BLFUNC(void, __thiscall, AddVoidCommand, DWORD* ns, const char* name, VoidCallback cb, const char *usage, int minArgs, int maxArgs);
-BLFUNC(void, __thiscall, AddBoolCommand, DWORD* ns, const char* name, BoolCallback cb, const char *usage, int minArgs, int maxArgs);
+BLFUNC(void, __thiscall, AddStringCommand, Namespace *ns, const char* name, StringCallback cb, const char *usage, int minArgs, int maxArgs);
+BLFUNC(void, __thiscall, AddIntCommand, Namespace *ns, const char* name, IntCallback cb, const char *usage, int minArgs, int maxArgs);
+BLFUNC(void, __thiscall, AddFloatCommand, Namespace *ns, const char* name, FloatCallback cb, const char *usage, int minArgs, int maxArgs);
+BLFUNC(void, __thiscall, AddVoidCommand, Namespace *ns, const char* name, VoidCallback cb, const char *usage, int minArgs, int maxArgs);
+BLFUNC(void, __thiscall, AddBoolCommand, Namespace *ns, const char* name, BoolCallback cb, const char *usage, int minArgs, int maxArgs);
 
 //Exposing variables to torquescript
 BLFUNC(void, __thiscall, AddVariable, DWORD dictionaryPtr, const char* name, int type, void* data);
@@ -217,6 +219,8 @@ bool InitTorqueStuff()
 	BLSCAN(CodeBlock__exec, "\x83\xEC\x44\x53\x55\x56\x8B\xE9", "xxxxxxxx");
 	BLSCAN(Sim__findObject_name, "\x57\x8B\x7C\x24\x08\x8A\x07", "xxxxxxx");
 	BLSCAN(Sim__findObject_id, "\x8B\x44\x24\x04\x8B\x0D\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\xC3", "xxxxxx????xx????x");
+	BLSCAN(SimObject__setDataField, "\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x33\xC4\x53\x8B\x9C\x24\x00\x00\x00\x00\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xF1\x8B\x4E\x18", "xx????x????xxxxxx????xxxx????xxxxxx");
+	BLSCAN(SimObject__getDataField, "\x53\x8B\x5C\x24\x0C\x55\x8B\x6C\x24\x0C\x56\x8B\xF1\x8B\x46\x18", "xxxxxxxxxxxxxxxx");
 
 	//These are almost identical. Long sigs required
 	BLSCAN(AddStringCommand,

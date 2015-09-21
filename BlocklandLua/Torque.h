@@ -1,15 +1,49 @@
 #include <Windows.h>
 
-enum NamespaceEntryType {
-	GroupMarker = -3,
-	OverloadMarker = -2,
-	InvalidFunctionType = -1,
-	ScriptFunctionType,
-	StringCallbackType,
-	IntCallbackType,
-	FloatCallbackType,
-	VoidCallbackType,
-	BoolCallbackType
+typedef unsigned int U32;
+typedef signed int S32;
+typedef float F32;
+typedef double F64;
+typedef U32 SimObjectId;
+
+struct Namespace
+{
+	struct Entry
+	{
+		enum
+		{
+			GroupMarker = -3,
+			OverloadMarker = -2,
+			InvalidFunctionType = -1,
+			ScriptFunctionType,
+			StringCallbackType,
+			IntCallbackType,
+			FloatCallbackType,
+			VoidCallbackType,
+			BoolCallbackType
+		};
+
+		Namespace *mNamespace;
+		// char _padding1[4];
+		Entry *mNext;
+		const char *mFunctionName;
+		S32 mType;
+		S32 mMinArgs;
+		S32 mMaxArgs;
+		const char *mUsage;
+		const char *mPackage;
+		void *mCode; // CodeBlock *mCode;
+		U32 mFunctionOffset;
+		void *cb; // union xCallback/const char *mGroupName
+	};
+};
+
+struct SimObject
+{
+	char _padding1[4];
+	const char *objectName;
+	char _padding2[24];
+	SimObjectId mId;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,19 +75,22 @@ BLFUNC_EXTERN(void, , Printf, const char* format, ...);
 
 extern const char *StringTableEntry(const char *str, bool caseSensitive=false);
 extern DWORD StringTable;
-BLFUNC_EXTERN(DWORD*, , LookupNamespace, const char* ns);
-BLFUNC_EXTERN(const char*, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
-BLFUNC_EXTERN(void*, __thiscall, Namespace__lookup, int namespacePtr, int name)
-BLFUNC_EXTERN(void*, __thiscall, CodeBlock__exec, void *this_, unsigned int ip, const char *functionName, void *thisNamespace, unsigned int argc, const char **argv, bool noCalls, void *packageName, int setFrame)
-BLFUNC_EXTERN(DWORD*, , Sim__findObject_name, const char *name);
-BLFUNC_EXTERN(DWORD*, , Sim__findObject_id, unsigned int id);
+BLFUNC_EXTERN(Namespace *, , LookupNamespace, const char *ns);
+BLFUNC_EXTERN(const char *, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
+BLFUNC_EXTERN(Namespace::Entry *, __thiscall, Namespace__lookup, Namespace *this_, const char *name)
+//BLFUNC_EXTERN(void *, __thiscall, CodeBlock__exec, void *this_, U32 offset, const char *fnName, Namespace *ns, U32 argc, const char **argv, bool noCalls, const char *packageName, int setFrame)
+BLFUNC_EXTERN(const char *, __thiscall, CodeBlock__exec, void *this_, U32 offset, Namespace *ns, const char *fnName, U32 argc, const char **argv, bool noCalls, const char *packageName, int setFrame)
+BLFUNC_EXTERN(SimObject *, , Sim__findObject_name, const char *name);
+BLFUNC_EXTERN(SimObject *, , Sim__findObject_id, unsigned int id);
+BLFUNC_EXTERN(void, __thiscall, SimObject__setDataField, SimObject *this_, const char *name, const char *arr, const char *value)
+BLFUNC_EXTERN(const char *, __thiscall, SimObject__getDataField, SimObject *this_, const char *name, const char *arr);
 
 //Callback types for exposing methods to torquescript
-typedef const char* (*StringCallback)(DWORD* obj, int argc, const char* argv[]);
-typedef int(*IntCallback)(DWORD* obj, int argc, const char* argv[]);
-typedef float(*FloatCallback)(DWORD* obj, int argc, const char* argv[]);
-typedef void(*VoidCallback)(DWORD* obj, int argc, const char* argv[]);
-typedef bool(*BoolCallback)(DWORD* obj, int argc, const char* argv[]);
+typedef const char* (*StringCallback)(SimObject *obj, int argc, const char* argv[]);
+typedef int(*IntCallback)(SimObject *obj, int argc, const char* argv[]);
+typedef float(*FloatCallback)(SimObject *obj, int argc, const char* argv[]);
+typedef void(*VoidCallback)(SimObject *obj, int argc, const char* argv[]);
+typedef bool(*BoolCallback)(SimObject *obj, int argc, const char* argv[]);
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

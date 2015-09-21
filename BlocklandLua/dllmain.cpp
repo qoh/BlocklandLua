@@ -1,13 +1,7 @@
 #include <cstdlib>
-#include "Torque.h"
-#include "lua.hpp"
+#include "misc.h"
 
 lua_State *gL;
-
-typedef struct {
-	DWORD *obj;
-	unsigned int id;
-} ts_object_t;
 
 bool istrue(const char *arg)
 {
@@ -19,7 +13,7 @@ void showluaerror(lua_State *L, bool silent=false)
 	if (silent)
 		lua_pop(L, -1);
 	else
-		Printf("Lua error: %s", lua_tostring(L, -1));
+		Printf("\x03%s", lua_tostring(L, -1));
 }
 
 void runlua(lua_State *L, const char *code, const char *name="input")
@@ -29,7 +23,7 @@ void runlua(lua_State *L, const char *code, const char *name="input")
 }
 
 // TorqueScript ConsoleFunction callbacks
-static const char *ts_luaEval(DWORD* obj, int argc, const char** argv)
+static const char *ts_luaEval(SimObject *obj, int argc, const char** argv)
 {
 	if (luaL_loadbuffer(gL, argv[1], strlen(argv[1]), "input") || lua_pcall(gL, 0, 1, 0))
 	{
@@ -40,7 +34,7 @@ static const char *ts_luaEval(DWORD* obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *ts_luaExec(DWORD *obj, int argc, const char** argv)
+static const char *ts_luaExec(SimObject *obj, int argc, const char** argv)
 {
 	// note: does not use Blockland file system atm, allows execution outside game folder, does not support zip
 	
@@ -56,7 +50,7 @@ static const char *ts_luaExec(DWORD *obj, int argc, const char** argv)
 	return lua_tostring(gL, -1);
 }
 
-static const char *ts_luaCall(DWORD *obj, int argc, const char** argv)
+static const char *ts_luaCall(SimObject *obj, int argc, const char** argv)
 {
 	lua_getglobal(gL, argv[1]);
 
@@ -77,19 +71,27 @@ static int lu_print(lua_State *L)
 {
 	int n = lua_gettop(L);
 
-	if (n == 1)
+	/* if (n == 1)
 		Printf("%s", lua_tostring(L, 1));
 	else if (n == 0)
 		Printf("");
-	else
+	else */
 	{
+		lua_getfield(L, LUA_REGISTRYINDEX, "blua_tostring");
+		int tostring = lua_gettop(L);
+
 		char message[1024];
 		message[0] = 0;
 
 		for (int i = 1; i <= n; i++)
 		{
 			if (i > 1) strcat_s(message, " ");
-			strcat_s(message, lua_tostring(L, i));
+
+			lua_pushvalue(L, tostring);
+			lua_pushvalue(L, i);
+			lua_call(L, 1, 1);
+			strcat_s(message, lua_tostring(L, -1));
+			lua_pop(L, 1);
 		}
 
 		Printf("%s", message);
@@ -104,11 +106,11 @@ static int lu_ts_eval(lua_State *L)
 	return 1;
 }
 
-static ts_object_t *check_ts_object(lua_State *L, int n)
+static LuaSimObject *check_ts_object(lua_State *L, int n)
 {
 	void *ud = luaL_checkudata(L, n, "ts_object_mt");
 	luaL_argcheck(L, ud != NULL, 1, "`ts_object' expected");
-	return (ts_object_t *)ud;
+	return (LuaSimObject *)ud;
 }
 
 static int lu_ts_func_call(lua_State *L)
@@ -117,22 +119,21 @@ static int lu_ts_func_call(lua_State *L)
 	if (n > 19)
 		return luaL_error(L, "too many arguments for TorqueScript");
 
-	char *nsEntry = (char *)lua_touserdata(L, lua_upvalueindex(1));
-
+	Namespace::Entry *nsEntry = (Namespace::Entry *)lua_touserdata(L, lua_upvalueindex(1));
+	
 	int argc = 0;
 	const char *argv[21];
 
-	argv[argc++] = *(char **)(nsEntry + 8);
-	DWORD *obj;
+	argv[argc++] = nsEntry->mFunctionName;
+	SimObject *obj;
 
 	if (!lua_isnil(L, 1))
 	{
-		ts_object_t *tso = check_ts_object(L, 1);
+		LuaSimObject *tso = check_ts_object(L, 1);
 		obj = tso->obj;
-
-		unsigned int id = *(unsigned int *)((char *)obj + 32);
+		
 		char idbuf[sizeof(int) * 3 + 2];
-		snprintf(idbuf, sizeof idbuf, "%d", id);
+		snprintf(idbuf, sizeof idbuf, "%d", obj->mId);
 
 		argv[argc++] = StringTableEntry(idbuf);
 	}
@@ -142,7 +143,7 @@ static int lu_ts_func_call(lua_State *L)
 	for (int i = 0; i < n; i++)
 	{
 		int t = lua_type(L, 2 + i);
-
+		
 		switch (t)
 		{
 		case LUA_TSTRING:
@@ -158,7 +159,7 @@ static int lu_ts_func_call(lua_State *L)
 			break;
 		case LUA_TUSERDATA:
 		{
-			ts_object_t *tso = (ts_object_t *)lua_touserdata(L, 2 + i);
+			LuaSimObject *tso = (LuaSimObject *)lua_touserdata(L, 2 + i);
 
 			// this is a mess! :(
 			if (!lua_getmetatable(L, 2 + i))
@@ -171,10 +172,8 @@ static int lu_ts_func_call(lua_State *L)
 			if (!eq)
 				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
 
-			// this is awkward
-			unsigned int id = *(unsigned int *)((char *)tso->obj + 32);
 			char idbuf[sizeof(int) * 3 + 2];
-			snprintf(idbuf, sizeof idbuf, "%d", id);
+			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->mId);
 
 			// alright fine
 			argv[argc++] = StringTableEntry(idbuf);
@@ -186,21 +185,14 @@ static int lu_ts_func_call(lua_State *L)
 		}
 	}
 
-	NamespaceEntryType mType = *(NamespaceEntryType *)(nsEntry + 12);
-	if (mType == ScriptFunctionType)
+	if (nsEntry->mType == Namespace::Entry::ScriptFunctionType)
 	{
-		unsigned int mFunctionOffset = *(unsigned int *)(nsEntry + 36);
-
-		if (mFunctionOffset)
+		if (nsEntry->mFunctionOffset)
 		{
-			char *mNamespace = (char *)(*nsEntry);
-			char *mFunctionName = *(char **)(nsEntry + 8);
-
-			char *mCode = *(char **)(nsEntry + 32);
-			char *mPackage = *(char **)(nsEntry + 28);
-			//int setFrame = *(int *)(pEntry + 12);
-			//lua_pushstring(L, (const char *)CodeBlock__exec(mCode, mFunctionOffset, fn, pNamespace, argc, argv, false, mPackage, setFrame));
-			lua_pushstring(L, (const char *)CodeBlock__exec(mCode, mFunctionOffset, mNamespace, mFunctionName, argc, argv, false, mPackage, 0));
+			lua_pushstring(L, CodeBlock__exec(
+				nsEntry->mCode, nsEntry->mFunctionOffset,
+				nsEntry->mNamespace, nsEntry->mFunctionName, argc, argv,
+				false, nsEntry->mPackage, 0));
 		}
 		else
 			lua_pushstring(L, "");
@@ -208,44 +200,54 @@ static int lu_ts_func_call(lua_State *L)
 		return 1;
 	}
 
-	int mMinArgs = *(int *)(nsEntry + 16);
-	int mMaxArgs = *(int *)(nsEntry + 20);
+	S32 mMinArgs = nsEntry->mMinArgs;
+	S32 mMaxArgs = nsEntry->mMaxArgs;
+
 	if ((mMinArgs && argc < mMinArgs) || (mMaxArgs && argc > mMaxArgs))
 	{
-		luaL_error(L, "wrong number of arguments (expects %d-%d)", mMinArgs, mMaxArgs);
+		luaL_error(L, "wrong number of arguments (expects %d-%d)", nsEntry->mMinArgs, nsEntry->mMaxArgs);
 		return 0;
 	}
 
-	void *cb = (int *)(nsEntry + 40);
-	switch (mType)
+	void *cb = nsEntry->cb;
+	switch (nsEntry->mType)
 	{
-	case StringCallbackType: lua_pushstring(L, (*(StringCallback *)cb)(obj, argc, argv)); return 1;
-	case IntCallbackType: lua_pushnumber(L, (*(IntCallback *)cb)(obj, argc, argv)); return 1;
-	case FloatCallbackType: lua_pushnumber(L, (*(FloatCallback *)cb)(obj, argc, argv)); return 1;
-	case BoolCallbackType: lua_pushboolean(L, (*(BoolCallback *)cb)(obj, argc, argv)); return 1;
-	case VoidCallbackType: (*(VoidCallback *)cb)(obj, argc, argv); return 0;
+	case Namespace::Entry::StringCallbackType:
+		lua_pushstring(L, ((StringCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::IntCallbackType:
+		lua_pushnumber(L, ((IntCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::FloatCallbackType:
+		lua_pushnumber(L, ((FloatCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::BoolCallbackType:
+		lua_pushboolean(L, ((BoolCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::VoidCallbackType:
+		((VoidCallback)cb)(obj, argc, argv);
+		return 0;
 	}
 
-	luaL_error(L, "invalid function call");
-	return 0;
+	return luaL_error(L, "invalid function call");
 }
 
 static int lu_ts_func(lua_State *L)
 {
 	int n = lua_gettop(L);
-	char *ns;
+	Namespace *ns;
 
 	if (n == 1)
-		ns = (char *)LookupNamespace(NULL);
+		ns = LookupNamespace(NULL);
 	else if (lua_isstring(L, 1))
-		ns = (char *)LookupNamespace(luaL_checkstring(L, 1));
+		ns = LookupNamespace(luaL_checkstring(L, 1));
 	else if (luaL_checkudata(L, 1, "ts_object_mt"))
 		return luaL_error(L, "not implemented yet");
 	else
 		return luaL_argerror(L, 1, "expected `string', `ts.obj'");
 
 	const char *fnName = luaL_checkstring(L, n);
-	char *nsEntry = (char *)Namespace__lookup((int)ns, (int)StringTableInsert(StringTable, fnName, false));
+	Namespace::Entry *nsEntry = Namespace__lookup(ns, StringTableEntry(fnName));
 
 	if (nsEntry == NULL)
 	{
@@ -261,7 +263,7 @@ static int lu_ts_func(lua_State *L)
 static int lu_ts_obj(lua_State *L)
 {
 	int t = lua_type(L, 1);
-	DWORD *obj;
+	SimObject *obj;
 
 	switch (t) {
 	case LUA_TNUMBER:
@@ -277,78 +279,67 @@ static int lu_ts_obj(lua_State *L)
 	if (obj == NULL)
 		return luaL_error(L, "object does not exist");
 
-	ts_object_t *tso = (ts_object_t *)lua_newuserdata(L, sizeof ts_object_t);
-	luaL_getmetatable(L, "ts_object_mt");
-	lua_setmetatable(L, -2);
-
-	tso->obj = obj;
-	tso->id = *(unsigned int *)((char *)obj + 32);
-	
+	newLuaSimObject(L, obj);
 	return 1;
 }
 
 static int lu_ts_obj_field_index(lua_State *L)
 {
-	ts_object_t *tso = check_ts_object(L, lua_upvalueindex(1));
+	LuaSimObject *tso = check_ts_object(L, lua_upvalueindex(1));
 	const char *k = luaL_checkstring(L, 2);
-	return luaL_error(L, "not implemented yet");
+	lua_pushstring(L, SimObject__getDataField(tso->obj, k, StringTableEntry("")));
+	return 1;
 }
 
 static int lu_ts_obj_field_newindex(lua_State *L)
 {
-	ts_object_t *tso = check_ts_object(L, lua_upvalueindex(1));
+	LuaSimObject *tso = check_ts_object(L, lua_upvalueindex(1));
 	const char *k = luaL_checkstring(L, 2);
 	const char *v = lua_tostring(L, 3);
-	return luaL_error(L, "not implemented yet");
+	SimObject__setDataField(tso->obj, k, StringTableEntry(""), v);
+	return 0;
 }
 
 static int lu_ts_obj_index(lua_State *L)
 {
-	ts_object_t *tso = check_ts_object(L, 1);
+	LuaSimObject *tso = check_ts_object(L, 1);
 	const char *k = luaL_checkstring(L, 2);
 
-	if (strcmp(k, "id") == 0)
+	if (strcmp(k, "_id") == 0)
 	{
-		lua_pushinteger(L, *(int *)((char *)tso->obj + 32));
+		lua_pushinteger(L, tso->id);
 		return 1;
 	}
-	else if (strcmp(k, "name") == 0)
+	else if (strcmp(k, "_name") == 0)
 	{
-		char *name = *((char **)tso->obj + 4);
-		lua_pushstring(L, name);
+		lua_pushstring(L, tso->obj->objectName);
 		return 1;
 	}
-	else if (strcmp(k, "exists") == 0)
+	else if (strcmp(k, "_exists") == 0)
 	{
-		DWORD *find = Sim__findObject_id(tso->id);
+		SimObject *find = Sim__findObject_id(tso->id);
 		lua_pushboolean(L, (int)(find != NULL));
 		return 1;
 	}
-	else if (strcmp(k, "field") == 0)
+	else
 	{
-		// I hate how this makes new tables every time, it really shouldn't
-		lua_newtable(L);
-		lua_newtable(L);
-		lua_pushstring(L, "__index"); lua_pushvalue(L, 1); lua_pushcclosure(L, lu_ts_obj_field_index, 1); lua_rawset(L, -3);
-		lua_pushstring(L, "__newindex"); lua_pushvalue(L, 1); lua_pushcclosure(L, lu_ts_obj_field_newindex, 1); lua_rawset(L, -3);
-		lua_setmetatable(L, -2);
+		lua_pushstring(L, SimObject__getDataField(tso->obj, k, StringTableEntry("")));
 		return 1;
 	}
-	else
-		return luaL_error(L, "unknown key %s", k);
 }
 
 static int lu_ts_obj_newindex(lua_State *L)
 {
-	ts_object_t *tso = check_ts_object(L, 1);
+	LuaSimObject *tso = check_ts_object(L, 1);
 	const char *k = luaL_checkstring(L, 2);
+	const char *v = lua_tostring(L, 3);
 
-	if (strcmp(k, "name") == 0)
-	{
+	if (strcmp(k, "_name") == 0)
 		return luaL_error(L, "not implemented yet");
-	}
 	else
-		return luaL_error(L, "unknown key %s", k);
+		SimObject__setDataField(tso->obj, k, StringTableEntry(""), v);
+
+	return 0;
 }
 
 static int lu_ts_new(lua_State *L)
@@ -369,6 +360,14 @@ static int lu_ts_global_newindex(lua_State *L)
 	return 0;
 }
 
+#define BLUA_INIT(name) extern void LuaInit##name(lua_State *L); LuaInit##name(L);
+
+void LuaInitClasses(lua_State *L)
+{
+	BLUA_INIT(Player);
+	BLUA_INIT(SimSet);
+}
+
 // Module setup stuff
 DWORD WINAPI Init(LPVOID args)
 {
@@ -385,6 +384,9 @@ DWORD WINAPI Init(LPVOID args)
 	}
 
 	luaL_openlibs(L);
+
+	lua_getglobal(L, "tostring");
+	lua_setfield(L, LUA_REGISTRYINDEX, "blua_tostring");
 
 	// set up ts_object metatable
 	luaL_newmetatable(L, "ts_object_mt");
@@ -414,6 +416,8 @@ DWORD WINAPI Init(LPVOID args)
 	lua_rawset(L, -3);
 
 	lua_setglobal(L, "ts");
+
+	LuaInitClasses(L);
 	
 	// set up the con table
 	runlua(L, R"lua(
