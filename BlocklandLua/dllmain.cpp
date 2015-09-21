@@ -339,7 +339,7 @@ DWORD WINAPI Init(LPVOID args)
 	Sleep(100);
 
 	//runlua(L, "pcall(function()require('autorun')end)");
-	Eval("$luaLoaded=true;if(isFunction(\"onLuaLoaded\"))onLuaLoaded();");
+	Eval("$luaLoaded=true;if(isFunction(\"onLuaLoaded\"))onLuaLoaded();for($i=1;$i<=$luaLoadFunc;$i++)call($luaLoadFunc[$i]);");
 
 	return 0;
 }
