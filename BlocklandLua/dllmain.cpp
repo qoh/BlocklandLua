@@ -156,8 +156,33 @@ static int lu_ts_func_call(lua_State *L)
 		case LUA_TNONE:
 			argv[argc++] = "";
 			break;
+		case LUA_TUSERDATA:
+		{
+			ts_object_t *tso = (ts_object_t *)lua_touserdata(L, 2 + i);
+
+			// this is a mess! :(
+			if (!lua_getmetatable(L, 2 + i))
+				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+
+			lua_getfield(L, LUA_REGISTRYINDEX, "ts_object_mt");
+			int eq = lua_rawequal(L, -2, -1);
+			lua_pop(L, 2);
+
+			if (!eq)
+				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+
+			// this is awkward
+			unsigned int id = *(unsigned int *)((char *)tso->obj + 32);
+			char idbuf[sizeof(int) * 3 + 2];
+			snprintf(idbuf, sizeof idbuf, "%d", id);
+
+			// alright fine
+			argv[argc++] = StringTableEntry(idbuf);
+			break;
+		}
 		default:
 			luaL_error(L, "cannot pass `%s' to TorqueScript", lua_typename(L, t));
+			break;
 		}
 	}
 
