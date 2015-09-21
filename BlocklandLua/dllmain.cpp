@@ -183,18 +183,24 @@ static int lu_ts_func_call(lua_State *L)
 
 static int lu_ts_func(lua_State *L)
 {
-	const char *nsName = luaL_checkstring(L, 1);
-	const char *fnName = luaL_checkstring(L, 2);
+	int n = lua_gettop(L);
+	char *ns;
 
-	if (!strcmp(nsName, ""))
-		nsName = NULL;
+	if (n == 1)
+		ns = (char *)LookupNamespace(NULL);
+	else if (lua_isstring(L, 1))
+		ns = (char *)LookupNamespace(luaL_checkstring(L, 1));
+	else if (luaL_checkudata(L, 1, "ts_object_mt"))
+		return luaL_error(L, "not implemented yet");
+	else
+		return luaL_argerror(L, 1, "expected `string', `ts.obj'");
 
-	char *ns = (char *)LookupNamespace(nsName);
+	const char *fnName = luaL_checkstring(L, n);
 	char *nsEntry = (char *)Namespace__lookup((int)ns, (int)StringTableInsert(StringTable, fnName, false));
 
 	if (nsEntry == NULL)
 	{
-		luaL_error(L, "unknown function %s::%s", nsName, fnName);
+		luaL_error(L, "unknown function %s", fnName);
 		return 0;
 	}
 
@@ -232,6 +238,21 @@ static int lu_ts_obj(lua_State *L)
 	return 1;
 }
 
+static int lu_ts_obj_field_index(lua_State *L)
+{
+	ts_object_t *tso = check_ts_object(L, lua_upvalueindex(1));
+	const char *k = luaL_checkstring(L, 2);
+	return luaL_error(L, "not implemented yet");
+}
+
+static int lu_ts_obj_field_newindex(lua_State *L)
+{
+	ts_object_t *tso = check_ts_object(L, lua_upvalueindex(1));
+	const char *k = luaL_checkstring(L, 2);
+	const char *v = lua_tostring(L, 3);
+	return luaL_error(L, "not implemented yet");
+}
+
 static int lu_ts_obj_index(lua_State *L)
 {
 	ts_object_t *tso = check_ts_object(L, 1);
@@ -250,7 +271,18 @@ static int lu_ts_obj_index(lua_State *L)
 	}
 	else if (strcmp(k, "exists") == 0)
 	{
-		lua_pushboolean(L, Sim__findObject_id(tso->id) != NULL);
+		DWORD *find = Sim__findObject_id(tso->id);
+		lua_pushboolean(L, (int)(find != NULL));
+		return 1;
+	}
+	else if (strcmp(k, "field") == 0)
+	{
+		// I hate how this makes new tables every time, it really shouldn't
+		lua_newtable(L);
+		lua_newtable(L);
+		lua_pushstring(L, "__index"); lua_pushvalue(L, 1); lua_pushcclosure(L, lu_ts_obj_field_index, 1); lua_rawset(L, -3);
+		lua_pushstring(L, "__newindex"); lua_pushvalue(L, 1); lua_pushcclosure(L, lu_ts_obj_field_newindex, 1); lua_rawset(L, -3);
+		lua_setmetatable(L, -2);
 		return 1;
 	}
 	else
@@ -264,10 +296,16 @@ static int lu_ts_obj_newindex(lua_State *L)
 
 	if (strcmp(k, "name") == 0)
 	{
-		return luaL_error(L, "can't do this yet");
+		return luaL_error(L, "not implemented yet");
 	}
 	else
 		return luaL_error(L, "unknown key %s", k);
+}
+
+static int lu_ts_new(lua_State *L)
+{
+	const char *className = luaL_checkstring(L, 1);
+	return luaL_error(L, "not implemented yet");
 }
 
 static int lu_ts_global_index(lua_State *L)
@@ -313,6 +351,7 @@ DWORD WINAPI Init(LPVOID args)
 	lua_pushstring(L, "func"); lua_pushcfunction(L, lu_ts_func); lua_rawset(L, -3);
 	lua_pushstring(L, "obj"); lua_pushcfunction(L, lu_ts_obj); lua_rawset(L, -3);
 	lua_pushstring(L, "grab"); lua_pushstring(L, "obj"); lua_rawget(L, -3); lua_rawset(L, -3);
+	lua_pushstring(L, "new"); lua_pushcfunction(L, lu_ts_new); lua_rawset(L, -3);
 
 	// set up ts.global get/set
 	lua_pushstring(L, "global");
@@ -332,7 +371,7 @@ DWORD WINAPI Init(LPVOID args)
 		local func = ts.func
 		_G.con = setmetatable({}, {
 		  __index = function(t, k)
-			local f = func("", k)
+			local f = func(k)
 		    t[k] = function(...) return f(nil, ...) end
 		    return t[k]
 		  end
