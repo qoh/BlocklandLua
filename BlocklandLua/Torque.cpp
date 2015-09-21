@@ -125,6 +125,11 @@ void PatchByte(BYTE* location, BYTE value)
 	VirtualProtect(location, 1, oldProtection, &oldProtection);
 }
 
+const char *StringTableEntry(const char *str, bool caseSensitive)
+{
+	return StringTableInsert(StringTable, str, caseSensitive);
+}
+
 //Register a torquescript function that returns a string. The function must look like this:
 //const char* func(DWORD* obj, int argc, const char* argv[])
 void ConsoleFunction(const char* nameSpace, const char* name, StringCallback callBack, const char* usage, int minArgs, int maxArgs)

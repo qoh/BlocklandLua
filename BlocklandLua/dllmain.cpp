@@ -113,29 +113,53 @@ static ts_object_t *check_ts_object(lua_State *L, int n)
 
 static int lu_ts_func_call(lua_State *L)
 {
+	int n = lua_gettop(L) - 1;
+	if (n > 19)
+		return luaL_error(L, "too many arguments for TorqueScript");
+
 	char *nsEntry = (char *)lua_touserdata(L, lua_upvalueindex(1));
 
 	int argc = 0;
 	const char *argv[21];
 
 	argv[argc++] = *(char **)(nsEntry + 8);
-
 	DWORD *obj;
+
 	if (!lua_isnil(L, 1))
 	{
 		ts_object_t *tso = check_ts_object(L, 1);
 		obj = tso->obj;
-		argv[argc++] = ""; // should be the object ID in a string
+
+		unsigned int id = *(unsigned int *)((char *)obj + 32);
+		char idbuf[sizeof(int) * 3 + 2];
+		snprintf(idbuf, sizeof idbuf, "%d", id);
+
+		argv[argc++] = StringTableEntry(idbuf);
 	}
 	else
 		obj = NULL;
 
-	int n = lua_gettop(L) - 1;
-	if (n > 19)
-		n = 19;
-
 	for (int i = 0; i < n; i++)
-		argv[argc++] = lua_tostring(L, 2 + i);
+	{
+		int t = lua_type(L, 2 + i);
+
+		switch (t)
+		{
+		case LUA_TSTRING:
+		case LUA_TNUMBER:
+			argv[argc++] = lua_tostring(L, 2 + i);
+			break;
+		case LUA_TBOOLEAN:
+			argv[argc++] = lua_toboolean(L, 2 + i) ? "1" : "0";
+			break;
+		case LUA_TNIL:
+		case LUA_TNONE:
+			argv[argc++] = "";
+			break;
+		default:
+			luaL_error(L, "cannot pass `%s' to TorqueScript", lua_typename(L, t));
+		}
+	}
 
 	NamespaceEntryType mType = *(NamespaceEntryType *)(nsEntry + 12);
 	if (mType == ScriptFunctionType)

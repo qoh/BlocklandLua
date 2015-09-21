@@ -39,6 +39,7 @@ enum NamespaceEntryType {
 //Con::printf
 BLFUNC_EXTERN(void, , Printf, const char* format, ...);
 
+extern const char *StringTableEntry(const char *str, bool caseSensitive=false);
 extern DWORD StringTable;
 BLFUNC_EXTERN(DWORD*, , LookupNamespace, const char* ns);
 BLFUNC_EXTERN(const char*, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
