@@ -13,7 +13,7 @@ inline LuaSimObject *newLuaSimObject(lua_State *L, SimObject *obj)
 	luaL_getmetatable(L, "ts_object_mt");
 	lua_setmetatable(L, -2);
 	ls->obj = obj;
-	ls->id = obj->mId;
+	ls->id = obj->id;
 	return ls;
 }
 
@@ -32,7 +32,7 @@ inline LuaSimObject *toNewLuaSimObject(lua_State *L, int i)
 
 	LuaSimObject *ls = (LuaSimObject *)lua_newuserdata(L, sizeof LuaSimObject);
 	ls->obj = obj;
-	ls->id = obj->mId;
+	ls->id = obj->id;
 	lua_replace(L, i);
 	return ls;
 }

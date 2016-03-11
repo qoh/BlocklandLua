@@ -30,8 +30,12 @@ Namespace__lookupFn Namespace__lookup;
 CodeBlock__execFn CodeBlock__exec;
 Sim__findObject_nameFn Sim__findObject_name;
 Sim__findObject_idFn Sim__findObject_id;
+Sim__postEventFn Sim__postEvent;
+Sim__cancelEventFn Sim__cancelEvent;
 SimObject__setDataFieldFn SimObject__setDataField;
 SimObject__getDataFieldFn SimObject__getDataField;
+SimObject__registerObjectFn SimObject__registerObject;
+AbstractClassRep_create_classNameFn AbstractClassRep_create_className;
 
 //Namespace::addCommand overloads
 BLFUNC(void, __thiscall, AddStringCommand, Namespace *ns, const char* name, StringCallback cb, const char *usage, int minArgs, int maxArgs);
@@ -220,8 +224,12 @@ bool torque_init()
 	BLSCAN(CodeBlock__exec, "\x83\xEC\x44\x53\x55\x56\x8B\xE9", "xxxxxxxx");
 	BLSCAN(Sim__findObject_name, "\x57\x8B\x7C\x24\x08\x8A\x07", "xxxxxxx");
 	BLSCAN(Sim__findObject_id, "\x8B\x44\x24\x04\x8B\x0D\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\xC3", "xxxxxx????xx????x");
+	BLSCAN(Sim__postEvent, "\x8B\x4C\x24\x08\x8B\x44\x24\x0C\x89\x41\x08", "xxxxxxxxxxx");
+	BLSCAN(Sim__cancelEvent, "\x8B\x0D\x00\x00\x00\x00\x85\xC9\xB8\x00\x00\x00\x00\x74\x41", "xx????xxx????xx");
 	BLSCAN(SimObject__setDataField, "\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x33\xC4\x53\x8B\x9C\x24\x00\x00\x00\x00\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xF1\x8B\x4E\x18", "xx????x????xxxxxx????xxxx????xxxxxx");
 	BLSCAN(SimObject__getDataField, "\x53\x8B\x5C\x24\x0C\x55\x8B\x6C\x24\x0C\x56\x8B\xF1\x8B\x46\x18", "xxxxxxxxxxxxxxxx");
+	BLSCAN(SimObject__registerObject, "\x53\x56\x8B\xF1\x83\x66\x18\xFC", "xxxxxxxx");
+	BLSCAN(AbstractClassRep_create_className, "\x56\x8B\x35\x00\x00\x00\x00\x85\xF6\x57\x74\x1C", "xxx????xxxxx");
 
 	//These are almost identical. Long sigs required
 	BLSCAN(AddStringCommand,

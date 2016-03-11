@@ -39,12 +39,49 @@ struct Namespace
 	};
 };
 
+struct ConsoleObject
+{
+};
+
 struct SimObject
 {
+	enum {
+#define BIT(x) (1 << (x))
+		Deleted = BIT(0),   ///< This object is marked for deletion.
+		Removed = BIT(1),   ///< This object has been unregistered from the object system.
+		Added = BIT(3),   ///< This object has been registered with the object system.
+		Selected = BIT(4),   ///< This object has been marked as selected. (in editor)
+		Expanded = BIT(5),   ///< This object has been marked as expanded. (in editor)
+		//ModStaticFields = BIT(6),    ///< The object allows you to read/modify static fields
+		//ModDynamicFields = BIT(7)     ///< The object allows you to read/modify dynamic fields
+		// why are these different?
+		ModStaticFields = BIT(7),    ///< The object allows you to read/modify static fields
+		ModDynamicFields = BIT(8)     ///< The object allows you to read/modify dynamic fields
+	};
+
 	char _padding1[4];
 	const char *objectName;
-	char _padding2[24];
-	SimObjectId mId;
+	// char _padding2[24];
+	// SimObjectId mId;
+	SimObject *nextNameObject;
+	SimObject *nextManagerNameObject;
+	SimObject *nextIdObject;
+	void *mGroup;
+	unsigned int mFlags;
+	void *mNotifyList;
+	SimObjectId id;
+	Namespace *mNameSpace;
+	unsigned int mTypeMask;
+	void *mFieldDictionary;
+};
+
+struct SimEvent
+{
+	SimEvent *nextEvent;
+	unsigned int startTime;
+	unsigned int time;
+	unsigned int sequenceCount;
+	SimObject *destObject;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,8 +122,12 @@ BLFUNC_EXTERN(Namespace::Entry *, __thiscall, Namespace__lookup, Namespace *this
 BLFUNC_EXTERN(const char *, __thiscall, CodeBlock__exec, void *this_, U32 offset, Namespace *ns, const char *fnName, U32 argc, const char **argv, bool noCalls, const char *packageName, int setFrame)
 BLFUNC_EXTERN(SimObject *, , Sim__findObject_name, const char *name);
 BLFUNC_EXTERN(SimObject *, , Sim__findObject_id, unsigned int id);
+BLFUNC_EXTERN(unsigned int, , Sim__postEvent, SimObject *destObject, SimEvent *event, U32 time);
+BLFUNC_EXTERN(void, , Sim__cancelEvent, unsigned int eventSequence);
 BLFUNC_EXTERN(void, __thiscall, SimObject__setDataField, SimObject *this_, const char *name, const char *arr, const char *value)
 BLFUNC_EXTERN(const char *, __thiscall, SimObject__getDataField, SimObject *this_, const char *name, const char *arr);
+BLFUNC_EXTERN(bool, __thiscall, SimObject__registerObject, SimObject *this_);
+BLFUNC_EXTERN(ConsoleObject *, , AbstractClassRep_create_className, const char *className);
 
 /* DWORD ScanFunc(char* pattern, char* mask);
 void PatchByte(BYTE* location, BYTE value); */

@@ -56,8 +56,6 @@ static const char *ts_luaExec(SimObject *obj, int argc, const char** argv)
 
 static const char *ts_luaCall(SimObject *obj, int argc, const char *argv[])
 {
-	Printf("%s", "cool!");
-	return "";
 	lua_getglobal(gL, argv[1]);
 
 	for (int i = 2; i < argc; i++)
@@ -155,7 +153,7 @@ static int lu_ts_func_call(lua_State *L)
 		obj = tso->obj;
 		
 		char idbuf[sizeof(int) * 3 + 2];
-		snprintf(idbuf, sizeof idbuf, "%d", obj->mId);
+		snprintf(idbuf, sizeof idbuf, "%d", obj->id);
 
 		argv[argc++] = StringTableEntry(idbuf);
 	}
@@ -195,7 +193,7 @@ static int lu_ts_func_call(lua_State *L)
 				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
 
 			char idbuf[sizeof(int) * 3 + 2];
-			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->mId);
+			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->id);
 
 			// alright fine
 			argv[argc++] = StringTableEntry(idbuf);
@@ -302,7 +300,7 @@ static int lu_ts_func_call_plain(lua_State *L)
 				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
 
 			char idbuf[sizeof(int) * 3 + 2];
-			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->mId);
+			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->id);
 
 			// alright fine
 			argv[argc++] = StringTableEntry(idbuf);
@@ -480,10 +478,14 @@ static int lu_ts_obj_newindex(lua_State *L)
 	const char *k = luaL_checkstring(L, 2);
 	const char *v = lua_tostring(L, 3);
 
+	/* Printf("mFlags = %i", tso->obj->mFlags);
+	Printf("mFlags & ModStaticFields = %i", tso->obj->mFlags & SimObject::ModStaticFields);
+	Printf("mFlags & ModDynamicFields = %i", tso->obj->mFlags & SimObject::ModDynamicFields); */
+
 	if (strcmp(k, "_name") == 0)
 		return luaL_error(L, "not implemented yet");
 	else
-		SimObject__setDataField(tso->obj, k, StringTableEntry(""), v);
+		SimObject__setDataField(tso->obj, StringTableEntry(k), StringTableEntry(""), v);
 
 	return 0;
 }
@@ -491,7 +493,71 @@ static int lu_ts_obj_newindex(lua_State *L)
 static int lu_ts_new(lua_State *L)
 {
 	const char *className = luaL_checkstring(L, 1);
-	return luaL_error(L, "not implemented yet");
+
+	SimObject *object = (SimObject *)AbstractClassRep_create_className(className);
+	if (object == NULL)
+		return luaL_error(L, "failed to create object");
+
+	object->mFlags |= SimObject::ModStaticFields;
+	object->mFlags |= SimObject::ModDynamicFields;
+
+	if (lua_gettop(L) >= 2)
+	{
+		luaL_checktype(L, 2, LUA_TTABLE);
+		lua_pushnil(L);
+
+		while (lua_next(L, 2) != 0)
+		{
+			// TODO: [] form
+			SimObject__setDataField(object, StringTableEntry(luaL_checkstring(L, -2)), StringTableEntry(""), lua_tostring(L, -1));
+			lua_pop(L, 1);
+		}
+
+		if (!SimObject__registerObject(object))
+		{
+			// delete object;
+			// free(object); // ?
+			// ???
+			// FIXME: explicit memory leak ;)
+			return luaL_error(L, "failed to register object");
+		}
+	}
+
+	newLuaSimObject(L, object);
+	return 1;
+}
+
+static int lu_ts_register(lua_State *L)
+{
+	LuaSimObject *tso = check_ts_object(L, 1);
+	SimObject *object = tso->obj;
+
+	if (object->id != 0)
+		return luaL_error(L, "this object is already registered");
+	
+	if (!SimObject__registerObject(object))
+		return luaL_error(L, "failed to register object");
+
+	tso->id = object->id;
+	return 0;
+}
+
+static int lu_ts_schedule(lua_State *L)
+{
+	unsigned int timeDelta = luaL_checknumber(L, 1);
+	/* SimObject *refObject = Sim__getRootGroup();
+	SimConsoleEvent *evt = new SimConsoleEvent(argc, func and argv, false);
+
+	signed int ret = Sim__postEvent(refObject, evt, Sim__getCurrentTime() + timeDelta);
+	lua_pushnumber(L, ret);
+	return 1; */
+	return luaL_error(L, "not implemented");
+}
+
+static int lu_ts_cancel(lua_State *L)
+{
+	Sim__cancelEvent(luaL_checknumber(L, 1));
+	return 0;
 }
 
 static int lu_ts_global_index(lua_State *L)
@@ -525,6 +591,9 @@ static luaL_Reg lua_ts_reg[] = {
 	{"obj", lu_ts_obj},
 	{"grab", lu_ts_obj},
 	{"new", lu_ts_new},
+	{"register", lu_ts_register},
+	{"schedule", lu_ts_schedule},
+	{"cancel", lu_ts_cancel},
 	{NULL, NULL}
 };
 
@@ -581,8 +650,7 @@ void init()
 		local func = ts.func
 		_G.con = setmetatable({}, {
 		  __index = function(t, k)
-			local f = func(k)
-		    t[k] = function(...) return f(nil, ...) end
+		    t[k] = func(k)
 		    return t[k]
 		  end
 		})
