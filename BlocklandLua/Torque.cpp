@@ -1,21 +1,15 @@
-#include "Torque.h"
+#include "torque.hpp"
 #include <Psapi.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Global variables
 
-//Start of the Blockland.exe module in memory
-static DWORD ImageBase;
+static DWORD ImageBase; // start of the Blockland.exe module in memory
+static DWORD ImageSize; // length of the Blockland.exe module
 
-//Length of the Blockland.exe module
-static DWORD ImageSize;
-
-//StringTable pointer
-DWORD StringTable;
-
-//Global Variable dictionary pointer
-static DWORD GlobalVars;
+DWORD StringTable; // StringTable pointer
+static DWORD GlobalVars; // global variable dictionary pointer
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +23,8 @@ PrintfFn Printf;
 LookupNamespaceFn LookupNamespace;
 
 //StringTable::insert
+initGameFn initGame;
+Sim__initFn Sim__init;
 StringTableInsertFn StringTableInsert;
 Namespace__lookupFn Namespace__lookup;
 CodeBlock__execFn CodeBlock__exec;
@@ -64,13 +60,14 @@ GetGlobalVariableFn GetGlobalVariable;
 void InitScanner(char* moduleName)
 {
 	//Find the module
-	HMODULE module = GetModuleHandleA(moduleName);
-
+	// HMODULE module = GetModuleHandleA(moduleName);
+	HMODULE module = (HMODULE)0x400000; // Sorry!
+	
 	if (module)
 	{
 		//Retrieve information about the module
 		MODULEINFO info;
-		GetModuleInformation(GetCurrentProcess(), module, &info, sizeof(MODULEINFO));
+		GetModuleInformation(GetCurrentProcess(), module, &info, sizeof MODULEINFO);
 
 		//Store relevant information
 		ImageBase = (DWORD)info.lpBaseOfDll;
@@ -197,12 +194,15 @@ const char* Eval(const char* str)
 	return Evaluate(str, false, NULL);
 }
 
-//Initialize the Torque Interface
-bool InitTorqueStuff()
+void torque_pre_init()
 {
-	//Init the scanner
 	InitScanner("Blockland.exe");
+	BLSCAN(Sim__init, "\x56\x33\xF6\x57\x89\x35", "xxxxxx");
+}
 
+//Initialize the Torque Interface
+bool torque_init()
+{
 	//Printf is required for debug output, so find it first
 	Printf = (PrintfFn)ScanFunc("\x8B\x4C\x24\x04\x8D\x44\x24\x08\x50\x6A\x00\x6A\x00\xE8\x00\x00\x00\x00\x83\xC4\x0C\xC3", "xxxxxxxxxxxxxx????xxxx");
 
@@ -213,6 +213,7 @@ bool InitTorqueStuff()
 	ShapeNameHudOnRender = (ShapeNameHudOnRenderFn)ScanFunc("\x81\xec\x00\x00\x00\x00\x53\x8b\xd9\x8a\x83\xc9\x00\x00\x00\x84\xc0\x55\x56\x57\x89\x5c\x24\x14", "xx????xxxxxxxxxxxxxxxxxx");
 
 	//First find all the functions
+	BLSCAN(initGame, "\x56\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x6A\xFF", "xx????x????x????xx");
 	BLSCAN(LookupNamespace, "\x8B\x44\x24\x04\x85\xC0\x75\x05", "xxxxxxxx");
 	BLSCAN(StringTableInsert, "\x53\x8B\x5C\x24\x08\x55\x56\x57\x53", "xxxxxxxxx");
 	BLSCAN(Namespace__lookup, "\x53\x56\x8B\xF1\x8B\x46\x24", "xxxxxxx");

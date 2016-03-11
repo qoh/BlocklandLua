@@ -1,5 +1,6 @@
 #include <cstdlib>
-#include "misc.h"
+#include "detours/detours.h"
+#include "misc.hpp"
 
 lua_State *gL;
 
@@ -31,13 +32,14 @@ static const char *ts_luaEval(SimObject *obj, int argc, const char** argv)
 		return "";
 	}
 
-	return lua_tostring(gL, -1);
+	const char *s = lua_tostring(gL, -1);
+	lua_pop(gL, 1);
+	return s;
 }
 
+// note: does not use Blockland file system atm, allows execution outside game folder, does not support zip
 static const char *ts_luaExec(SimObject *obj, int argc, const char** argv)
 {
-	// note: does not use Blockland file system atm, allows execution outside game folder, does not support zip
-	
 	if (argc < 3 || !istrue(argv[2]))
 		Printf("Executing %s.", argv[1]);
 
@@ -47,11 +49,15 @@ static const char *ts_luaExec(SimObject *obj, int argc, const char** argv)
 		return "";
 	}
 
-	return lua_tostring(gL, -1);
+	const char *s = lua_tostring(gL, -1);
+	lua_pop(gL, 1);
+	return s;
 }
 
-static const char *ts_luaCall(SimObject *obj, int argc, const char** argv)
+static const char *ts_luaCall(SimObject *obj, int argc, const char *argv[])
 {
+	Printf("%s", "cool!");
+	return "";
 	lua_getglobal(gL, argv[1]);
 
 	for (int i = 2; i < argc; i++)
@@ -63,40 +69,56 @@ static const char *ts_luaCall(SimObject *obj, int argc, const char** argv)
 		return "";
 	}
 
-	return lua_tostring(gL, -1);
+	const char *s = lua_tostring(gL, -1);
+	lua_pop(gL, 1);
+	return s;
+}
+
+static const char *ts_luaCallAuto(SimObject *obj, int argc, const char *argv[])
+{
+	lua_getglobal(gL, argv[0]);
+
+	for (int i = 1; i < argc; i++) {
+		lua_pushstring(gL, argv[i]);
+	}
+
+	if (lua_pcall(gL, argc - 1, 1, 0)) {
+		showluaerror(gL);
+		return "";
+	}
+
+	const char *s = lua_tostring(gL, -1);
+	lua_pop(gL, 1);
+	return s;
 }
 
 // Lua CFunction callbacks
 static int lu_print(lua_State *L)
 {
-	int n = lua_gettop(L);
+	int nargs = lua_gettop(L);
 
-	/* if (n == 1)
-		Printf("%s", lua_tostring(L, 1));
-	else if (n == 0)
-		Printf("");
-	else */
+	lua_getglobal(L, "tostring");
+		
+	char outstring[1024] = "";
+
+	for (int i = 1; i <= nargs; i++)
 	{
-		lua_getfield(L, LUA_REGISTRYINDEX, "blua_tostring");
-		int tostring = lua_gettop(L);
+		lua_pushvalue(L, -1);
+		lua_pushvalue(L, i);
+		lua_call(L, 1, 1);
 
-		char message[1024];
-		message[0] = 0;
+		const char *s = lua_tostring(L, -1);
+		if (s == NULL)
+			return luaL_error(L, "'tostring' must return a string to 'print'");
+		
+		if (i > 1)
+			strcat_s(outstring, " ");
 
-		for (int i = 1; i <= n; i++)
-		{
-			if (i > 1) strcat_s(message, " ");
-
-			lua_pushvalue(L, tostring);
-			lua_pushvalue(L, i);
-			lua_call(L, 1, 1);
-			strcat_s(message, lua_tostring(L, -1));
-			lua_pop(L, 1);
-		}
-
-		Printf("%s", message);
+		strcat_s(outstring, s);
+		lua_pop(L, 1);
 	}
 
+	Printf("%s", outstring);
 	return 0;
 }
 
@@ -232,6 +254,113 @@ static int lu_ts_func_call(lua_State *L)
 	return luaL_error(L, "invalid function call");
 }
 
+/* FIXME FIXME: horrendous code duplication */
+static int lu_ts_func_call_plain(lua_State *L)
+{
+	int n = lua_gettop(L);
+	if (n > 19)
+		return luaL_error(L, "too many arguments for TorqueScript");
+
+	Namespace::Entry *nsEntry = (Namespace::Entry *)lua_touserdata(L, lua_upvalueindex(1));
+
+	int argc = 0;
+	const char *argv[21];
+
+	argv[argc++] = nsEntry->mFunctionName;
+	SimObject *obj = NULL;
+
+	for (int i = 0; i < n; i++)
+	{
+		int t = lua_type(L, 1 + i);
+
+		switch (t)
+		{
+		case LUA_TSTRING:
+		case LUA_TNUMBER:
+			argv[argc++] = lua_tostring(L, 1 + i);
+			break;
+		case LUA_TBOOLEAN:
+			argv[argc++] = lua_toboolean(L,12 + i) ? "1" : "0";
+			break;
+		case LUA_TNIL:
+		case LUA_TNONE:
+			argv[argc++] = "";
+			break;
+		case LUA_TUSERDATA:
+		{
+			LuaSimObject *tso = (LuaSimObject *)lua_touserdata(L, 2 + i);
+
+			// this is a mess! :(
+			if (!lua_getmetatable(L, 1 + i))
+				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+
+			lua_getfield(L, LUA_REGISTRYINDEX, "ts_object_mt");
+			int eq = lua_rawequal(L, -2, -1);
+			lua_pop(L, 2);
+
+			if (!eq)
+				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+
+			char idbuf[sizeof(int) * 3 + 2];
+			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->mId);
+
+			// alright fine
+			argv[argc++] = StringTableEntry(idbuf);
+			break;
+		}
+		default:
+			luaL_error(L, "cannot pass `%s' to TorqueScript", lua_typename(L, t));
+			break;
+		}
+	}
+
+	if (nsEntry->mType == Namespace::Entry::ScriptFunctionType)
+	{
+		if (nsEntry->mFunctionOffset)
+		{
+			lua_pushstring(L, CodeBlock__exec(
+				nsEntry->mCode, nsEntry->mFunctionOffset,
+				nsEntry->mNamespace, nsEntry->mFunctionName, argc, argv,
+				false, nsEntry->mPackage, 0));
+		}
+		else
+			lua_pushstring(L, "");
+
+		return 1;
+	}
+
+	S32 mMinArgs = nsEntry->mMinArgs;
+	S32 mMaxArgs = nsEntry->mMaxArgs;
+
+	if ((mMinArgs && argc < mMinArgs) || (mMaxArgs && argc > mMaxArgs))
+	{
+		luaL_error(L, "wrong number of arguments (expects %d-%d)", nsEntry->mMinArgs, nsEntry->mMaxArgs);
+		return 0;
+	}
+
+	void *cb = nsEntry->cb;
+	switch (nsEntry->mType)
+	{
+	case Namespace::Entry::StringCallbackType:
+		lua_pushstring(L, ((StringCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::IntCallbackType:
+		lua_pushnumber(L, ((IntCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::FloatCallbackType:
+		lua_pushnumber(L, ((FloatCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::BoolCallbackType:
+		lua_pushboolean(L, ((BoolCallback)cb)(obj, argc, argv));
+		return 1;
+	case Namespace::Entry::VoidCallbackType:
+		((VoidCallback)cb)(obj, argc, argv);
+		return 0;
+	}
+
+	return luaL_error(L, "invalid function call");
+}
+
 static int lu_ts_func(lua_State *L)
 {
 	int n = lua_gettop(L);
@@ -256,8 +385,25 @@ static int lu_ts_func(lua_State *L)
 	}
 
 	lua_pushlightuserdata(L, nsEntry);
-	lua_pushcclosure(L, lu_ts_func_call, 1);
+
+	if (n == 1)
+		lua_pushcclosure(L, lu_ts_func_call_plain, 1);
+	else
+		lua_pushcclosure(L, lu_ts_func_call, 1);
+
 	return 1;
+}
+
+static int lu_ts_expose(lua_State *L)
+{
+	int nargs = lua_gettop(L);
+
+	for (int i = 1; i < nargs; i++) {
+		const char *name = luaL_checkstring(L, i);
+		ConsoleFunction(NULL, name, ts_luaCallAuto, name, 1, 20);
+	}
+
+	return 0;
 }
 
 static int lu_ts_obj(lua_State *L)
@@ -360,65 +506,76 @@ static int lu_ts_global_newindex(lua_State *L)
 	return 0;
 }
 
-#define BLUA_INIT(name) extern void LuaInit##name(lua_State *L); LuaInit##name(L);
+static luaL_reg ts_obj_reg[] = {
+	{"__index", lu_ts_obj_index},
+	{"__newindex", lu_ts_obj_newindex},
+	{NULL, NULL}
+};
 
-void LuaInitClasses(lua_State *L)
-{
-	BLUA_INIT(Player);
-	BLUA_INIT(SimSet);
-}
+static luaL_Reg lua_ts_global_reg[] = {
+	{"__index", lu_ts_global_index},
+	{"__newindex", lu_ts_global_newindex},
+	{NULL, NULL}
+};
 
-// Module setup stuff
-DWORD WINAPI Init(LPVOID args)
+static luaL_Reg lua_ts_reg[] = {
+	{"eval", lu_ts_eval},
+	{"func", lu_ts_func},
+	{"expose", lu_ts_expose},
+	{"obj", lu_ts_obj},
+	{"grab", lu_ts_obj},
+	{"new", lu_ts_new},
+	{NULL, NULL}
+};
+
+void init()
 {
-	if (!InitTorqueStuff())
-		return 0;
+	if (!torque_init())
+		return;
+
+	Printf("Lua Init:");
+	Printf("   Using %s", LUA_VERSION);
 
 	lua_State *L = luaL_newstate();
 	gL = L;
 
 	if (L == NULL)
 	{
-		Printf("Failed to initialize Lua");
-		return 1;
+		Printf("   Failed to create Lua state");
+		return;
 	}
+
+	Printf("   Preparing Lua environment");
 
 	luaL_openlibs(L);
 
-	lua_getglobal(L, "tostring");
-	lua_setfield(L, LUA_REGISTRYINDEX, "blua_tostring");
-
 	// set up ts_object metatable
 	luaL_newmetatable(L, "ts_object_mt");
-	lua_pushstring(L, "__index"); lua_pushcfunction(L, lu_ts_obj_index); lua_rawset(L, -3);
-	lua_pushstring(L, "__newindex"); lua_pushcfunction(L, lu_ts_obj_newindex); lua_rawset(L, -3);
+	luaL_register(L, NULL, ts_obj_reg);
 	lua_pop(L, -1);
 
-	// set up global functions
-	lua_pushcfunction(L, lu_print); lua_setglobal(L, "print");
+	// Replace print (use Blockland's echo directly)
+	lua_pushcfunction(L, lu_print);
+	lua_setglobal(L, "print");
 
+	// Set up the global `ts` table
 	lua_newtable(L);
-	lua_pushstring(L, "eval"); lua_pushcfunction(L, lu_ts_eval); lua_rawset(L, -3);
-	lua_pushstring(L, "func"); lua_pushcfunction(L, lu_ts_func); lua_rawset(L, -3);
-	lua_pushstring(L, "obj"); lua_pushcfunction(L, lu_ts_obj); lua_rawset(L, -3);
-	lua_pushstring(L, "grab"); lua_pushstring(L, "obj"); lua_rawget(L, -3); lua_rawset(L, -3);
-	lua_pushstring(L, "new"); lua_pushcfunction(L, lu_ts_new); lua_rawset(L, -3);
-
-	// set up ts.global get/set
-	lua_pushstring(L, "global");
-	lua_newtable(L);
-	lua_newtable(L);
-
-	lua_pushstring(L, "__index"); lua_pushcfunction(L, lu_ts_global_index); lua_rawset(L, -3);
-	lua_pushstring(L, "__newindex"); lua_pushcfunction(L, lu_ts_global_newindex); lua_rawset(L, -3);
-
+	luaL_register(L, NULL, lua_ts_reg);
+	lua_pushstring(L, "global"); // for setting the key on `ts`
+	lua_newtable(L); // the `ts.global` table
+	lua_newtable(L); // the metatable of the `ts.global` table
+	luaL_register(L, NULL, lua_ts_global_reg);
 	lua_setmetatable(L, -2);
-	lua_rawset(L, -3);
-
+	lua_rawset(L, -3); // set the `global` key on `ts`
 	lua_setglobal(L, "ts");
 
-	LuaInitClasses(L);
-	
+	// Load all the Lua types into the Lua state
+#define BLUA_INIT(name) extern void LuaInit##name(lua_State *L); LuaInit##name(L);
+
+	BLUA_INIT(Player);
+	BLUA_INIT(SimSet);
+	BLUA_INIT(vec3);
+
 	// set up the con table
 	runlua(L, R"lua(
 		local func = ts.func
@@ -431,23 +588,32 @@ DWORD WINAPI Init(LPVOID args)
 		})
 	)lua");
 
+	Printf("   Installing Lua extensions");
+
 	ConsoleFunction(NULL, "luaEval", ts_luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
 	ConsoleFunction(NULL, "luaExec", ts_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
 	ConsoleFunction(NULL, "luaCall", ts_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
-	Printf("Lua DLL loaded");
-	Sleep(100);
-
-	//runlua(L, "pcall(function()require('autorun')end)");
-	Eval("$luaLoaded=true;if(isFunction(\"onLuaLoaded\"))onLuaLoaded();for($i=1;$i<=$luaLoadFunc;$i++)call($luaLoadFunc[$i]);");
-
-	return 0;
+	Printf("");
 }
 
-int WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
+MologieDetours::Detour<Sim__initFn> *detour_Sim__init = NULL;
+
+void hook_Sim__init(void)
+{
+	init();
+	return detour_Sim__init->GetOriginalFunction()();
+}
+
+int __stdcall DllMain(HINSTANCE hInstance, unsigned long reason, void *reserved)
 {
 	if (reason == DLL_PROCESS_ATTACH)
-		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Init, NULL, 0, NULL);
+	{
+		torque_pre_init();
+		detour_Sim__init = new MologieDetours::Detour<Sim__initFn>(Sim__init, hook_Sim__init);
+	}
 
 	return true;
 }
+
+extern "C" void __declspec(dllexport) __cdecl placeholder(void) { }

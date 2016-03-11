@@ -1,4 +1,5 @@
-#include <Windows.h>
+#pragma once
+#include <windows.h>
 
 typedef unsigned int U32;
 typedef signed int S32;
@@ -75,6 +76,8 @@ BLFUNC_EXTERN(void, , Printf, const char* format, ...);
 
 extern const char *StringTableEntry(const char *str, bool caseSensitive=false);
 extern DWORD StringTable;
+BLFUNC_EXTERN(bool, , initGame, int argc, const char **argv);
+BLFUNC_EXTERN(void, , Sim__init, void);
 BLFUNC_EXTERN(Namespace *, , LookupNamespace, const char *ns);
 BLFUNC_EXTERN(const char *, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
 BLFUNC_EXTERN(Namespace::Entry *, __thiscall, Namespace__lookup, Namespace *this_, const char *name)
@@ -85,55 +88,25 @@ BLFUNC_EXTERN(SimObject *, , Sim__findObject_id, unsigned int id);
 BLFUNC_EXTERN(void, __thiscall, SimObject__setDataField, SimObject *this_, const char *name, const char *arr, const char *value)
 BLFUNC_EXTERN(const char *, __thiscall, SimObject__getDataField, SimObject *this_, const char *name, const char *arr);
 
-//Callback types for exposing methods to torquescript
-typedef const char* (*StringCallback)(SimObject *obj, int argc, const char* argv[]);
-typedef int(*IntCallback)(SimObject *obj, int argc, const char* argv[]);
-typedef float(*FloatCallback)(SimObject *obj, int argc, const char* argv[]);
-typedef void(*VoidCallback)(SimObject *obj, int argc, const char* argv[]);
-typedef bool(*BoolCallback)(SimObject *obj, int argc, const char* argv[]);
+/* DWORD ScanFunc(char* pattern, char* mask);
+void PatchByte(BYTE* location, BYTE value); */
 
+typedef const char *(*StringCallback)(SimObject *obj, int argc, const char* argv[]);
+typedef int         (*IntCallback)   (SimObject *obj, int argc, const char* argv[]);
+typedef float       (*FloatCallback) (SimObject *obj, int argc, const char* argv[]);
+typedef void        (*VoidCallback)  (SimObject *obj, int argc, const char* argv[]);
+typedef bool        (*BoolCallback)  (SimObject *obj, int argc, const char* argv[]);
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Public functions
+void ConsoleFunction(const char* scope, const char* name, StringCallback callBack, const char* usage, int minArgs, int maxArgs);
+void ConsoleFunction(const char* scope, const char* name,    IntCallback callBack, const char* usage, int minArgs, int maxArgs);
+void ConsoleFunction(const char* scope, const char* name,  FloatCallback callBack, const char* usage, int minArgs, int maxArgs);
+void ConsoleFunction(const char* scope, const char* name,   VoidCallback callBack, const char* usage, int minArgs, int maxArgs);
+void ConsoleFunction(const char* scope, const char* name,   BoolCallback callBack, const char* usage, int minArgs, int maxArgs);
 
-//Scan the module for a pattern
-DWORD ScanFunc(char* pattern, char* mask);
-
-//Change a byte at a specific location in memory
-void PatchByte(BYTE* location, BYTE value);
-
-//Register a torquescript function that returns a string. The function must look like this:
-//const char* func(DWORD* obj, int argc, const char* argv[])
-void ConsoleFunction(const char* nameSpace, const char* name, StringCallback callBack, const char* usage, int minArgs, int maxArgs);
-
-//Register a torquescript function that returns an int. The function must look like this:
-//int func(DWORD* obj, int argc, const char* argv[])
-void ConsoleFunction(const char* nameSpace, const char* name, IntCallback callBack, const char* usage, int minArgs, int maxArgs);
-
-//Register a torquescript function that returns a float. The function must look like this:
-//float func(DWORD* obj, int argc, const char* argv[])
-void ConsoleFunction(const char* nameSpace, const char* name, FloatCallback callBack, const char* usage, int minArgs, int maxArgs);
-
-//Register a torquescript function that returns nothing. The function must look like this:
-//void func(DWORD* obj, int argc, const char* argv[])
-void ConsoleFunction(const char* nameSpace, const char* name, VoidCallback callBack, const char* usage, int minArgs, int maxArgs);
-
-//Register a torquescript function that returns a bool. The function must look like this:
-//bool func(DWORD* obj, int argc, const char* argv[])
-void ConsoleFunction(const char* nameSpace, const char* name, BoolCallback callBack, const char* usage, int minArgs, int maxArgs);
-
-//Expose an integer variable to torquescript
-void ConsoleVariable(const char* name, int* data);
-
-//Expose a boolean variable to torquescript
-void ConsoleVariable(const char* name, bool* data);
-
-//Expose a float variable to torquescript
-void ConsoleVariable(const char* name, float* data);
-
-//Expose a string variable to torquescript
-void ConsoleVariable(const char* name, char* data);
+void ConsoleVariable(const char *name,   int *data);
+void ConsoleVariable(const char *name,  bool *data);
+void ConsoleVariable(const char *name, float *data);
+void ConsoleVariable(const char *name,  char *data);
 
 //Evaluate a torquescript string in global scope
 const char* Eval(const char* str);
@@ -144,5 +117,5 @@ BLFUNC_EXTERN(char *, , GetGlobalVariable, const char *name);
 typedef void(__thiscall* ShapeNameHudOnRenderFn)(DWORD* obj, DWORD arg1, DWORD arg2, DWORD arg3);
 static ShapeNameHudOnRenderFn ShapeNameHudOnRender;
 
-//Initialize the Torque Interface
-bool InitTorqueStuff();
+void torque_pre_init();
+bool torque_init();

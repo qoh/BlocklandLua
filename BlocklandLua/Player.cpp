@@ -1,4 +1,5 @@
-#include "misc.h"
+#include "misc.hpp"
+#include "vec3.hpp"
 
 struct Player
 {
@@ -22,11 +23,7 @@ static int lu_Player(lua_State *L)
 static int lu_Player__getPosition(lua_State *L)
 {
 	Player *p = (Player *)checkLuaSimObject(L, 1)->obj;
-	lua_createtable(L, 3, 0);
-	lua_pushnumber(L, p->x); lua_rawseti(L, -2, 1);
-	lua_pushnumber(L, p->y); lua_rawseti(L, -2, 2);
-	lua_pushnumber(L, p->z); lua_rawseti(L, -2, 3);
-	return 1;
+	return vec3_new(L, p->x, p->y, p->z);
 }
 
 static const luaL_Reg funcs[] =

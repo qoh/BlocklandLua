@@ -1,5 +1,5 @@
 #pragma once
-#include "Torque.h"
+#include "torque.hpp"
 #include "lua.hpp"
 
 typedef struct {
