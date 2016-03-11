@@ -76,11 +76,18 @@ static const char *ts_luaCallAuto(SimObject *obj, int argc, const char *argv[])
 {
 	lua_getglobal(gL, argv[0]);
 
-	for (int i = 1; i < argc; i++) {
-		lua_pushstring(gL, argv[i]);
+	if (lua_type(gL, -1) == LUA_TNIL)
+	{
+		Printf("\x03Missing Lua global for \"%s\"", argv[0]);
+		lua_pop(gL, -1);
+		return "";
 	}
 
-	if (lua_pcall(gL, argc - 1, 1, 0)) {
+	for (int i = 1; i < argc; i++)
+		lua_pushstring(gL, argv[i]);
+
+	if (lua_pcall(gL, argc - 1, 1, 0))
+	{
 		showluaerror(gL);
 		return "";
 	}
@@ -364,12 +371,14 @@ static int lu_ts_func(lua_State *L)
 	int n = lua_gettop(L);
 	Namespace *ns;
 
+	LuaSimObject *lso;
+
 	if (n == 1)
 		ns = LookupNamespace(NULL);
 	else if (lua_isstring(L, 1))
 		ns = LookupNamespace(luaL_checkstring(L, 1));
-	else if (luaL_checkudata(L, 1, "ts_object_mt"))
-		return luaL_error(L, "not implemented yet");
+	else if (lso = (LuaSimObject *)luaL_checkudata(L, 1, "ts_object_mt"))
+		ns = lso->obj->mNameSpace;
 	else
 		return luaL_argerror(L, 1, "expected `string', `ts.obj'");
 
@@ -394,13 +403,13 @@ static int lu_ts_func(lua_State *L)
 
 static int lu_ts_expose(lua_State *L)
 {
-	int nargs = lua_gettop(L);
+	const char *name = luaL_checkstring(L, 1);
+	const char *desc = name;
 
-	for (int i = 1; i < nargs; i++) {
-		const char *name = luaL_checkstring(L, i);
-		ConsoleFunction(NULL, name, ts_luaCallAuto, name, 1, 20);
-	}
+	if (lua_gettop(L) >= 2)
+		desc = luaL_checkstring(L, 2);
 
+	ConsoleFunction(NULL, name, ts_luaCallAuto, desc, 1, 20);
 	return 0;
 }
 
