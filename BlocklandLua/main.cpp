@@ -553,7 +553,7 @@ static int lu_ts_register(lua_State *L)
 
 static int lu_ts_schedule(lua_State *L)
 {
-	unsigned int timeDelta = luaL_checknumber(L, 1);
+	unsigned int timeDelta = static_cast<unsigned int>(luaL_checknumber(L, 1));
 	/* SimObject *refObject = Sim__getRootGroup();
 	SimConsoleEvent *evt = new SimConsoleEvent(argc, func and argv, false);
 
@@ -565,9 +565,42 @@ static int lu_ts_schedule(lua_State *L)
 
 static int lu_ts_cancel(lua_State *L)
 {
-	Sim__cancelEvent(luaL_checknumber(L, 1));
+	Sim__cancelEvent(static_cast<unsigned int>(luaL_checknumber(L, 1)));
 	return 0;
 }
+
+/* MologieDetours::Detour<ShapeNameHudOnRenderFn> *detour_ShapeNameHudOnRender = NULL;
+
+// typedef void(__fastcall *ShapeNameHudOnRenderFn)(SimObject *this_, int, int arg1, int arg2);
+// void __stdcall hook_ShapeNameHudOnRender(DWORD* obj, DWORD arg1, DWORD arg2, DWORD arg3)
+void __fastcall hook_ShapeNameHudOnRender(DWORD *this_, int dummy, int arg1, int arg2)
+{
+	// detour_ShapeNameHudOnRender->GetOriginalFunction()(obj, arg1, arg2, arg3);
+	detour_ShapeNameHudOnRender->GetOriginalFunction()(this_, dummy, arg1, arg2);
+
+	lua_pushstring(gL, "hook:render2d");
+	lua_gettable(gL, LUA_REGISTRYINDEX);
+
+	if (lua_pcall(gL, 0, 0, 0))
+		showluaerror(gL);
+}
+
+static int lu_ts_hook(lua_State *L)
+{
+	const char *ev = luaL_checkstring(L, 1);
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	if (detour_ShapeNameHudOnRender == NULL)
+		detour_ShapeNameHudOnRender = new MologieDetours::Detour<ShapeNameHudOnRenderFn>(ShapeNameHudOnRender, (ShapeNameHudOnRenderFn)hook_ShapeNameHudOnRender);
+
+	lua_pushvalue(L, 2);
+	lua_pushstring(L, "hook:");
+	lua_pushvalue(L, 1);
+	lua_concat(L, 2);
+	lua_settable(gL, LUA_REGISTRYINDEX);
+
+	return 0;
+} */
 
 static int lu_ts_global_index(lua_State *L)
 {
@@ -603,15 +636,15 @@ static luaL_Reg lua_ts_reg[] = {
 	{"register", lu_ts_register},
 	{"schedule", lu_ts_schedule},
 	{"cancel", lu_ts_cancel},
+	// {"hook", lu_ts_hook},
 	{NULL, NULL}
 };
 
-void init()
+bool init()
 {
 	if (!torque_init())
-		return;
+		return false;
 
-	Printf("Lua Init:");
 	Printf("   Using %s", LUA_VERSION);
 
 	lua_State *L = luaL_newstate();
@@ -619,11 +652,9 @@ void init()
 
 	if (L == NULL)
 	{
-		Printf("   Failed to create Lua state");
-		return;
+		Printf("   \x03" "Failed to create Lua state");
+		return false;
 	}
-
-	Printf("   Preparing Lua environment");
 
 	luaL_openlibs(L);
 
@@ -665,30 +696,18 @@ void init()
 		})
 	)lua");
 
-	Printf("   Installing Lua extensions");
-
 	ConsoleFunction(NULL, "luaEval", ts_luaEval, "luaEval(string code, bool silent=false) - Execute a chunk of code as Lua.", 2, 3);
 	ConsoleFunction(NULL, "luaExec", ts_luaExec, "luaExec(string filename, bool silent=false) - Execute a Lua code file.", 2, 3);
 	ConsoleFunction(NULL, "luaCall", ts_luaCall, "luaCall(string name, ...) - Call a Lua function.", 2, 20);
 
-	Printf("");
-}
-
-MologieDetours::Detour<Sim__initFn> *detour_Sim__init = NULL;
-
-void hook_Sim__init(void)
-{
-	init();
-	return detour_Sim__init->GetOriginalFunction()();
+	Printf("   Ready for action");
+	return true;
 }
 
 int __stdcall DllMain(HINSTANCE hInstance, unsigned long reason, void *reserved)
 {
 	if (reason == DLL_PROCESS_ATTACH)
-	{
-		torque_pre_init();
-		detour_Sim__init = new MologieDetours::Detour<Sim__initFn>(Sim__init, hook_Sim__init);
-	}
+		return init();
 
 	return true;
 }

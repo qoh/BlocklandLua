@@ -114,7 +114,6 @@ BLFUNC_EXTERN(void, , Printf, const char* format, ...);
 extern const char *StringTableEntry(const char *str, bool caseSensitive=false);
 extern DWORD StringTable;
 BLFUNC_EXTERN(bool, , initGame, int argc, const char **argv);
-BLFUNC_EXTERN(void, , Sim__init, void);
 BLFUNC_EXTERN(Namespace *, , LookupNamespace, const char *ns);
 BLFUNC_EXTERN(const char *, __thiscall, StringTableInsert, DWORD stringTablePtr, const char* val, const bool caseSensitive)
 BLFUNC_EXTERN(Namespace::Entry *, __thiscall, Namespace__lookup, Namespace *this_, const char *name)
@@ -155,7 +154,8 @@ const char* Eval(const char* str);
 BLFUNC_EXTERN(void, , SetGlobalVariable, const char *name, const char *value);
 BLFUNC_EXTERN(char *, , GetGlobalVariable, const char *name);
 
-typedef void(__thiscall* ShapeNameHudOnRenderFn)(DWORD* obj, DWORD arg1, DWORD arg2, DWORD arg3);
+typedef void(__thiscall *ShapeNameHudOnRenderFn)(DWORD* obj, DWORD arg1, DWORD arg2, DWORD arg3);
+// typedef void(__fastcall *ShapeNameHudOnRenderFn)(SimObject *this_, int, int arg1, int arg2);
 static ShapeNameHudOnRenderFn ShapeNameHudOnRender;
 
 void torque_pre_init();

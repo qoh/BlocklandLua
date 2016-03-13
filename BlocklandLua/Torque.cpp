@@ -24,7 +24,6 @@ LookupNamespaceFn LookupNamespace;
 
 //StringTable::insert
 initGameFn initGame;
-Sim__initFn Sim__init;
 StringTableInsertFn StringTableInsert;
 Namespace__lookupFn Namespace__lookup;
 CodeBlock__execFn CodeBlock__exec;
@@ -198,15 +197,11 @@ const char* Eval(const char* str)
 	return Evaluate(str, false, NULL);
 }
 
-void torque_pre_init()
-{
-	InitScanner("Blockland.exe");
-	BLSCAN(Sim__init, "\x56\x33\xF6\x57\x89\x35", "xxxxxx");
-}
-
 //Initialize the Torque Interface
 bool torque_init()
 {
+	InitScanner("Blockland.exe");
+
 	//Printf is required for debug output, so find it first
 	Printf = (PrintfFn)ScanFunc("\x8B\x4C\x24\x04\x8D\x44\x24\x08\x50\x6A\x00\x6A\x00\xE8\x00\x00\x00\x00\x83\xC4\x0C\xC3", "xxxxxxxxxxxxxx????xxxx");
 
