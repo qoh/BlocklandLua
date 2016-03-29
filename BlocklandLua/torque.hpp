@@ -160,5 +160,4 @@ typedef void(__thiscall *ShapeNameHudOnRenderFn)(DWORD* obj, DWORD arg1, DWORD a
 // typedef void(__fastcall *ShapeNameHudOnRenderFn)(SimObject *this_, int, int arg1, int arg2);
 static ShapeNameHudOnRenderFn ShapeNameHudOnRender;
 
-void torque_pre_init();
 bool torque_init();

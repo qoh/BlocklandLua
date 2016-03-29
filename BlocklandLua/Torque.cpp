@@ -62,11 +62,11 @@ GetGlobalVariableFn GetGlobalVariable;
 //Functions
 
 //Set the module start and length
-void InitScanner(char* moduleName)
+void InitScanner()
 {
 	//Find the module
 	// HMODULE module = GetModuleHandleA(moduleName);
-	HMODULE module = (HMODULE)0x400000; // Sorry!
+	HMODULE module = GetModuleHandle(NULL);
 	
 	if (module)
 	{
@@ -202,7 +202,7 @@ const char* Eval(const char* str)
 //Initialize the Torque Interface
 bool torque_init()
 {
-	InitScanner("Blockland.exe");
+	InitScanner();
 
 	//Printf is required for debug output, so find it first
 	Printf = (PrintfFn)ScanFunc("\x8B\x4C\x24\x04\x8D\x44\x24\x08\x50\x6A\x00\x6A\x00\xE8\x00\x00\x00\x00\x83\xC4\x0C\xC3", "xxxxxxxxxxxxxx????xxxx");

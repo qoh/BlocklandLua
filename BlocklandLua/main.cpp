@@ -699,12 +699,30 @@ bool init()
 	return true;
 }
 
-int __stdcall DllMain(HINSTANCE hInstance, unsigned long reason, void *reserved)
+bool deinit()
 {
-	if (reason == DLL_PROCESS_ATTACH)
-		return init();
+	if (gL != NULL)
+	{
+		lua_close(gL);
+		gL = NULL;
+	}
 
 	return true;
+}
+
+int __stdcall DllMain(HINSTANCE hInstance, unsigned long reason, void *reserved)
+{
+	switch (reason)
+	{
+	case DLL_PROCESS_ATTACH:
+		return init();
+
+	case DLL_PROCESS_DETACH:
+		return deinit();
+
+	default:
+		return true;
+	}
 }
 
 extern "C" void __declspec(dllexport) __cdecl placeholder(void) { }
