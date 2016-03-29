@@ -133,13 +133,6 @@ static int lu_ts_eval(lua_State *L)
 	return 1;
 }
 
-static LuaSimObject *check_ts_object(lua_State *L, int n)
-{
-	void *ud = luaL_checkudata(L, n, "ts_object_mt");
-	luaL_argcheck(L, ud != NULL, 1, "`ts_object' expected");
-	return (LuaSimObject *)ud;
-}
-
 static int lu_ts_func_call(lua_State *L)
 {
 	int n = lua_gettop(L) - 1;
@@ -156,16 +149,18 @@ static int lu_ts_func_call(lua_State *L)
 
 	if (!lua_isnil(L, 1))
 	{
-		LuaSimObject *tso = check_ts_object(L, 1);
-		obj = tso->obj;
-		
-		char idbuf[sizeof(int) * 3 + 2];
-		snprintf(idbuf, sizeof idbuf, "%d", obj->id);
-
-		argv[argc++] = StringTableEntry(idbuf);
+		SimObject **ref = checkLuaSimObjectRef(L, 1);
+		obj = *ref;
 	}
 	else
 		obj = NULL;
+
+	if (obj != NULL)
+	{
+		char idbuf[sizeof(int) * 3 + 2];
+		snprintf(idbuf, sizeof idbuf, "%d", obj->id);
+		argv[argc++] = StringTableEntry(idbuf);
+	}
 
 	for (int i = 0; i < n; i++)
 	{
@@ -186,24 +181,18 @@ static int lu_ts_func_call(lua_State *L)
 			break;
 		case LUA_TUSERDATA:
 		{
-			LuaSimObject *tso = (LuaSimObject *)lua_touserdata(L, 2 + i);
+			SimObjectId id;
+			SimObject **ref = checkLuaSimObjectRef(L, 2 + i);
 
-			// this is a mess! :(
-			if (!lua_getmetatable(L, 2 + i))
-				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
-
-			lua_getfield(L, LUA_REGISTRYINDEX, "ts_object_mt");
-			int eq = lua_rawequal(L, -2, -1);
-			lua_pop(L, 2);
-
-			if (!eq)
-				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+			if (*ref != NULL)
+				id = (*ref)->id;
+			else
+				id = 0;
 
 			char idbuf[sizeof(int) * 3 + 2];
-			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->id);
-
-			// alright fine
+			snprintf(idbuf, sizeof idbuf, "%d", id);
 			argv[argc++] = StringTableEntry(idbuf);
+
 			break;
 		}
 		default:
@@ -285,7 +274,7 @@ static int lu_ts_func_call_plain(lua_State *L)
 			argv[argc++] = lua_tostring(L, 1 + i);
 			break;
 		case LUA_TBOOLEAN:
-			argv[argc++] = lua_toboolean(L,12 + i) ? "1" : "0";
+			argv[argc++] = lua_toboolean(L, 1 + i) ? "1" : "0";
 			break;
 		case LUA_TNIL:
 		case LUA_TNONE:
@@ -293,24 +282,18 @@ static int lu_ts_func_call_plain(lua_State *L)
 			break;
 		case LUA_TUSERDATA:
 		{
-			LuaSimObject *tso = (LuaSimObject *)lua_touserdata(L, 2 + i);
+			SimObjectId id;
+			SimObject **ref = checkLuaSimObjectRef(L, 1 + i);
 
-			// this is a mess! :(
-			if (!lua_getmetatable(L, 1 + i))
-				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
-
-			lua_getfield(L, LUA_REGISTRYINDEX, "ts_object_mt");
-			int eq = lua_rawequal(L, -2, -1);
-			lua_pop(L, 2);
-
-			if (!eq)
-				return luaL_error(L, "can only pass `ts.obj' userdata to TorqueScript");
+			if (*ref != NULL)
+				id = (*ref)->id;
+			else
+				id = 0;
 
 			char idbuf[sizeof(int) * 3 + 2];
-			snprintf(idbuf, sizeof idbuf, "%d", tso->obj->id);
-
-			// alright fine
+			snprintf(idbuf, sizeof idbuf, "%d", id);
 			argv[argc++] = StringTableEntry(idbuf);
+
 			break;
 		}
 		default:
@@ -371,14 +354,14 @@ static int lu_ts_func(lua_State *L)
 	int n = lua_gettop(L);
 	Namespace *ns;
 
-	LuaSimObject *lso;
+	SimObject **ref;
 
 	if (n == 1)
 		ns = LookupNamespace(NULL);
 	else if (lua_isstring(L, 1))
 		ns = LookupNamespace(luaL_checkstring(L, 1));
-	else if (lso = (LuaSimObject *)luaL_checkudata(L, 1, "ts_object_mt"))
-		ns = lso->obj->mNameSpace;
+	else if (ref = tryLuaSimObjectRef(L, 1))
+		ns = (*ref)->mNameSpace;
 	else
 		return luaL_argerror(L, 1, "expected `string', `ts.obj'");
 
@@ -438,52 +421,65 @@ static int lu_ts_obj(lua_State *L)
 
 static int lu_ts_obj_field_index(lua_State *L)
 {
-	LuaSimObject *tso = check_ts_object(L, lua_upvalueindex(1));
+	SimObject *obj = checkLuaSimObject(L, lua_upvalueindex(1));
 	const char *k = luaL_checkstring(L, 2);
-	lua_pushstring(L, SimObject__getDataField(tso->obj, k, StringTableEntry("")));
+	lua_pushstring(L, SimObject__getDataField(obj, k, StringTableEntry("")));
 	return 1;
 }
 
 static int lu_ts_obj_field_newindex(lua_State *L)
 {
-	LuaSimObject *tso = check_ts_object(L, lua_upvalueindex(1));
+	SimObject *obj = checkLuaSimObject(L, lua_upvalueindex(1));
 	const char *k = luaL_checkstring(L, 2);
 	const char *v = lua_tostring(L, 3);
-	SimObject__setDataField(tso->obj, k, StringTableEntry(""), v);
+	SimObject__setDataField(obj, k, StringTableEntry(""), v);
+	return 0;
+}
+
+static int lu_ts_obj_gc(lua_State *L)
+{
+	SimObject **ref = checkLuaSimObjectRef(L, 1);
+
+	if (*ref != NULL)
+		SimObject__unregisterReference(*ref, ref);
+
 	return 0;
 }
 
 static int lu_ts_obj_index(lua_State *L)
 {
-	LuaSimObject *tso = check_ts_object(L, 1);
+	SimObject *obj = *checkLuaSimObjectRef(L, 1);
 	const char *k = luaL_checkstring(L, 2);
+
+	if (strcmp(k, "_exists") == 0)
+	{
+		lua_pushboolean(L, (int)(obj != NULL));
+		return 1;
+	}
+
+	if (obj == NULL)
+		return luaL_error(L, "object does not exist");
 
 	if (strcmp(k, "_id") == 0)
 	{
-		lua_pushinteger(L, tso->id);
+		lua_pushinteger(L, obj->id);
 		return 1;
 	}
 	else if (strcmp(k, "_name") == 0)
 	{
-		lua_pushstring(L, tso->obj->objectName);
-		return 1;
-	}
-	else if (strcmp(k, "_exists") == 0)
-	{
-		SimObject *find = Sim__findObject_id(tso->id);
-		lua_pushboolean(L, (int)(find != NULL));
+		lua_pushstring(L, obj->objectName);
 		return 1;
 	}
 	else
 	{
-		lua_pushstring(L, SimObject__getDataField(tso->obj, k, StringTableEntry("")));
+		lua_pushstring(L, SimObject__getDataField(obj, k, StringTableEntry("")));
 		return 1;
 	}
 }
 
 static int lu_ts_obj_newindex(lua_State *L)
 {
-	LuaSimObject *tso = check_ts_object(L, 1);
+	SimObject *obj = checkLuaSimObject(L, 1);
 	const char *k = luaL_checkstring(L, 2);
 	const char *v = lua_tostring(L, 3);
 
@@ -494,7 +490,7 @@ static int lu_ts_obj_newindex(lua_State *L)
 	if (strcmp(k, "_name") == 0)
 		return luaL_error(L, "not implemented yet");
 	else
-		SimObject__setDataField(tso->obj, StringTableEntry(k), StringTableEntry(""), v);
+		SimObject__setDataField(obj, StringTableEntry(k), StringTableEntry(""), v);
 
 	return 0;
 }
@@ -538,8 +534,7 @@ static int lu_ts_new(lua_State *L)
 
 static int lu_ts_register(lua_State *L)
 {
-	LuaSimObject *tso = check_ts_object(L, 1);
-	SimObject *object = tso->obj;
+	SimObject *object = checkLuaSimObject(L, 1);
 
 	if (object->id != 0)
 		return luaL_error(L, "this object is already registered");
@@ -547,7 +542,6 @@ static int lu_ts_register(lua_State *L)
 	if (!SimObject__registerObject(object))
 		return luaL_error(L, "failed to register object");
 
-	tso->id = object->id;
 	return 0;
 }
 
@@ -615,6 +609,7 @@ static int lu_ts_global_newindex(lua_State *L)
 }
 
 static luaL_reg ts_obj_reg[] = {
+	{"__gc", lu_ts_obj_gc},
 	{"__index", lu_ts_obj_index},
 	{"__newindex", lu_ts_obj_newindex},
 	{NULL, NULL}

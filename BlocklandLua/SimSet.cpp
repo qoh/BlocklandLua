@@ -19,14 +19,14 @@ static int lu_SimSet(lua_State *L)
 
 static int lu_SimSet__getCount(lua_State *L)
 {
-	SimSet *p = (SimSet *)checkLuaSimObject(L, 1)->obj;
+	SimSet *p = (SimSet *)assumeLuaSimObject(L, 1);
 	lua_pushinteger(L, p->mElementCount);
 	return 1;
 }
 
 static int lu_SimSet__getObject(lua_State *L)
 {
-	SimSet *p = (SimSet *)checkLuaSimObject(L, 1)->obj;
+	SimSet *p = (SimSet *)assumeLuaSimObject(L, 1);
 	U32 i = luaL_checkinteger(L, 2);
 	if (i < 0 || i >= p->mElementCount)
 		return luaL_error(L, "index %d out of range", i);
@@ -36,7 +36,7 @@ static int lu_SimSet__getObject(lua_State *L)
 
 static int lu_SimSet__iternext(lua_State *L)
 {
-	SimSet *p = (SimSet *)checkLuaSimObject(L, 1)->obj;
+	SimSet *p = (SimSet *)assumeLuaSimObject(L, 1);
 	U32 i = luaL_checkinteger(L, 2);
 
 	if (i < 0 || i >= p->mElementCount)

@@ -126,6 +126,8 @@ BLFUNC_EXTERN(void, , Sim__cancelEvent, unsigned int eventSequence);
 BLFUNC_EXTERN(void, __thiscall, SimObject__setDataField, SimObject *this_, const char *name, const char *arr, const char *value)
 BLFUNC_EXTERN(const char *, __thiscall, SimObject__getDataField, SimObject *this_, const char *name, const char *arr);
 BLFUNC_EXTERN(bool, __thiscall, SimObject__registerObject, SimObject *this_);
+BLFUNC_EXTERN(void, __thiscall, SimObject__registerReference, SimObject *this_, SimObject **ptr);
+BLFUNC_EXTERN(void, __thiscall, SimObject__unregisterReference, SimObject *this_, SimObject **ptr);
 BLFUNC_EXTERN(ConsoleObject *, , AbstractClassRep_create_className, const char *className);
 
 /* DWORD ScanFunc(char* pattern, char* mask);

@@ -22,7 +22,7 @@ static int lu_Player(lua_State *L)
 
 static int lu_Player__getPosition(lua_State *L)
 {
-	Player *p = (Player *)checkLuaSimObject(L, 1)->obj;
+	Player *p = (Player *)assumeLuaSimObject(L, 1);
 	return vec3_new(L, p->x, p->y, p->z);
 }
 

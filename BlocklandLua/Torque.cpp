@@ -34,6 +34,8 @@ Sim__cancelEventFn Sim__cancelEvent;
 SimObject__setDataFieldFn SimObject__setDataField;
 SimObject__getDataFieldFn SimObject__getDataField;
 SimObject__registerObjectFn SimObject__registerObject;
+SimObject__registerReferenceFn SimObject__registerReference;
+SimObject__unregisterReferenceFn SimObject__unregisterReference;
 AbstractClassRep_create_classNameFn AbstractClassRep_create_className;
 
 //Namespace::addCommand overloads
@@ -224,6 +226,8 @@ bool torque_init()
 	BLSCAN(SimObject__setDataField, "\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x33\xC4\x53\x8B\x9C\x24\x00\x00\x00\x00\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xF1\x8B\x4E\x18", "xx????x????xxxxxx????xxxx????xxxxxx");
 	BLSCAN(SimObject__getDataField, "\x53\x8B\x5C\x24\x0C\x55\x8B\x6C\x24\x0C\x56\x8B\xF1\x8B\x46\x18", "xxxxxxxxxxxxxxxx");
 	BLSCAN(SimObject__registerObject, "\x53\x56\x8B\xF1\x83\x66\x18\xFC", "xxxxxxxx");
+	BLSCAN(SimObject__registerReference, "\xA1\x00\x00\x00\x00\x85\xC0\x56\x8B\xF1", "x????xxxxx");
+	BLSCAN(SimObject__unregisterReference, "\x8D\x41\x1C\x83\x38\x00\x74\x1C", "xxxxxxxx");
 	BLSCAN(AbstractClassRep_create_className, "\x56\x8B\x35\x00\x00\x00\x00\x85\xF6\x57\x74\x1C", "xxx????xxxxx");
 
 	//These are almost identical. Long sigs required
