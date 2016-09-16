@@ -506,28 +506,6 @@ static int lu_ts_new(lua_State *L)
 	object->mFlags |= SimObject::ModStaticFields;
 	object->mFlags |= SimObject::ModDynamicFields;
 
-	if (lua_gettop(L) >= 2)
-	{
-		luaL_checktype(L, 2, LUA_TTABLE);
-		lua_pushnil(L);
-
-		while (lua_next(L, 2) != 0)
-		{
-			// TODO: [] form
-			SimObject__setDataField(object, StringTableEntry(luaL_checkstring(L, -2)), StringTableEntry(""), lua_tostring(L, -1));
-			lua_pop(L, 1);
-		}
-
-		if (!SimObject__registerObject(object))
-		{
-			// delete object;
-			// free(object); // ?
-			// ???
-			// FIXME: explicit memory leak ;)
-			return luaL_error(L, "failed to register object");
-		}
-	}
-
 	newLuaSimObject(L, object);
 	return 1;
 }
@@ -626,7 +604,6 @@ static luaL_Reg lua_ts_reg[] = {
 	{"func", lu_ts_func},
 	{"expose", lu_ts_expose},
 	{"obj", lu_ts_obj},
-	{"grab", lu_ts_obj},
 	{"new", lu_ts_new},
 	{"register", lu_ts_register},
 	{"schedule", lu_ts_schedule},

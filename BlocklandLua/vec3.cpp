@@ -125,6 +125,33 @@ static int vec3_mt_div(lua_State *L)
 	}
 }
 
+static int vec3_index_x(lua_State *L)
+{
+	vec3_t *v = (vec3_t *)luaL_checkudata(L, 1, "vec3");
+	if (lua_gettop(L) >= 2)
+		v->x = luaL_checknumber(L, 2);
+	lua_pushnumber(L, v->x);
+	return 1;
+}
+
+static int vec3_index_y(lua_State *L)
+{
+	vec3_t *v = (vec3_t *)luaL_checkudata(L, 1, "vec3");
+	if (lua_gettop(L) >= 2)
+		v->y = luaL_checknumber(L, 2);
+	lua_pushnumber(L, v->y);
+	return 1;
+}
+
+static int vec3_index_z(lua_State *L)
+{
+	vec3_t *v = (vec3_t *)luaL_checkudata(L, 1, "vec3");
+	if (lua_gettop(L) >= 2)
+		v->z = luaL_checknumber(L, 2);
+	lua_pushnumber(L, v->z);
+	return 1;
+}
+
 static int vec3_index_unit(lua_State *L)
 {
 	vec3_t *v = (vec3_t *)luaL_checkudata(L, 1, "vec3");
@@ -176,6 +203,9 @@ static luaL_Reg metatable[] = {
 };
 
 static luaL_Reg index[] = {
+	{"x", vec3_index_x},
+	{"y", vec3_index_y},
+	{"z", vec3_index_z},
 	{"unit", vec3_index_unit},
 	{"dist", vec3_index_dist},
 	{"cross", vec3_index_cross},
