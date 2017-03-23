@@ -412,9 +412,6 @@ static int lu_ts_obj(lua_State *L)
 		return luaL_error(L, "`number' or `string' expected");
 	}
 
-	if (obj == NULL)
-		return luaL_error(L, "object does not exist");
-
 	newLuaSimObject(L, obj);
 	return 1;
 }
