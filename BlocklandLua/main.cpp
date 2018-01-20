@@ -34,6 +34,9 @@ static const char *ts_luaEval(SimObject *obj, int argc, const char** argv)
 
 	const char *s = lua_tostring(gL, -1);
 	lua_pop(gL, 1);
+	if(s == nullptr || s == NULL) {
+		return "";
+	}
 	return s;
 }
 
@@ -51,6 +54,9 @@ static const char *ts_luaExec(SimObject *obj, int argc, const char** argv)
 
 	const char *s = lua_tostring(gL, -1);
 	lua_pop(gL, 1);
+	if(s == nullptr || s == NULL) {
+		return "";
+	}
 	return s;
 }
 
@@ -69,6 +75,9 @@ static const char *ts_luaCall(SimObject *obj, int argc, const char *argv[])
 
 	const char *s = lua_tostring(gL, -1);
 	lua_pop(gL, 1);
+	if(s == nullptr || s == NULL) {
+		return "";
+	}
 	return s;
 }
 
@@ -94,6 +103,9 @@ static const char *ts_luaCallAuto(SimObject *obj, int argc, const char *argv[])
 
 	const char *s = lua_tostring(gL, -1);
 	lua_pop(gL, 1);
+	if(s == nullptr || s == NULL) {
+		return "";
+	}
 	return s;
 }
 
